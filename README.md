@@ -52,7 +52,9 @@ Apri questa cartella in Android Studio. Toolchain fissata per riproducibilità: 
 
 Windows: `gradlew.bat` con gli stessi argomenti. Android Studio richiede una connessione per scaricare gli strumenti; **l'app installata non ha accesso a Internet**.
 
-Le build debug e release di questo progetto usano `signing/development.jks` con alias/password standard `androiddebugkey` / `android`. La release consegnata è ottimizzata con R8, ma usa una firma di sviluppo: è una **versione di prova**, non una distribuzione definitiva. Questa chiave consente di aggiornarla senza cambiare firma. Prima di distribuire una versione definitiva genera una chiave privata distinta, custodiscila e sostituisci la configurazione `signingConfig` della release.
+Il repository non contiene chiavi private. Le build debug e release usano la chiave debug locale generata da Android Gradle Plugin. Se disponi della chiave originale inclusa nello ZIP del progetto consegnato, puoi copiarla localmente in `signing/development.jks` (alias/password di sviluppo `androiddebugkey` / `android`): Gradle la userà per mantenere la firma dell'APK in `dist/`. Il file è escluso da Git.
+
+L'APK consegnato è ottimizzato con R8 e firmato con la chiave di sviluppo originale: è una **versione di prova**. Una build con una chiave locale diversa non può aggiornare direttamente quell'APK. Per conservare la compatibilità degli aggiornamenti usa la stessa chiave locale. Prima di distribuire una versione definitiva genera una chiave privata distinta, custodiscila fuori dal repository e sostituisci la configurazione `signingConfig` della release.
 
 ## Architettura e velocità
 

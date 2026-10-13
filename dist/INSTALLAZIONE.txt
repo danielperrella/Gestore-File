@@ -1,0 +1,12 @@
+Gestore File 0.1.1 — installazione su Android 11 e successivi
+
+1. Estrai GestoreFile-0.1.1.apk nella cartella Download del telefono.
+2. Apri il file estratto dal gestore file Xiaomi e scegli Installa pacchetti.
+3. Se Android lo richiede, autorizza l'installazione da questa fonte.
+4. Avvia Gestore File (icona con cartella verde acqua e spunta) e autorizza la memoria interna.
+
+Questa app si installa separatamente dal gestore Xiaomi. La chiave e il pacchetto originali sono conservati: se la versione 0.1.0 fosse già installata, 0.1.1 può aggiornarla.
+
+Verificati: 38 test automatici, firma per Android 14, integrità ZIP e allineamento APK, assenza del permesso Internet. Versione di prova; l'installazione sullo Xiaomi e l'USB reale restano da provare.
+
+Se l'installer si chiude ancora, non disinstallare app o cancellare dati: riferisci se hai aperto l'APK estratto nei Download e l'eventuale messaggio di Android. La causa della chiusura non è stata identificata dal solo sintomo.

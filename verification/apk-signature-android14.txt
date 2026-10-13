@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Libero Files Development, O=Local, C=IT
+Signer #1 certificate SHA-256 digest: 17e6f8f7aeab30425e78f6939babc0c41a03bff80ae7460ca7313bb69bd7abe7
+Signer #1 certificate SHA-1 digest: cc5dca40204bb63ecaecae2555d1a36be79e4888
+Signer #1 certificate MD5 digest: ba880ed0158c84af2b7f596258d4681a
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: f533b1988ff083502048ba628bb8f1fb29132e274faa66ff031cb71c53844597
+Signer #1 public key SHA-1 digest: c1ec423da55e753341b2e279b9875486efec5f76
+Signer #1 public key MD5 digest: dfd89aada03fc7765344e78109094ae5

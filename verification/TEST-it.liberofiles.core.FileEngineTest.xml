@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="it.liberofiles.core.FileEngineTest" tests="29" skipped="0" failures="0" errors="0" timestamp="2026-10-13T20:58:37" time="0.22">
+  <properties />
+  <testcase name="atomicMovePreservesBytes" classname="it.liberofiles.core.FileEngineTest" time="0.033" />
+  <testcase name="zipSlipRejectedWithoutOutsideWrites" classname="it.liberofiles.core.FileEngineTest" time="0.03" />
+  <testcase name="rejectsUnsafeNamesAndEscape" classname="it.liberofiles.core.FileEngineTest" time="0.006" />
+  <testcase name="modificationJustBeforeSourceCleanupIsPreserved" classname="it.liberofiles.core.FileEngineTest" time="0.02" />
+  <testcase name="sourceModificationAbortsMove" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="renameFailureRollsBackEveryFile" classname="it.liberofiles.core.FileEngineTest" time="0.014" />
+  <testcase name="corruptedDestinationCannotDeleteOriginal" classname="it.liberofiles.core.FileEngineTest" time="0.005" />
+  <testcase name="directoryReplacementIsExplicitlyRejected" classname="it.liberofiles.core.FileEngineTest" time="0.001" />
+  <testcase name="cancellationKeepsOriginalAndOldDestination" classname="it.liberofiles.core.FileEngineTest" time="0.023" />
+  <testcase name="trashAndRestoreAvoidOverwrite" classname="it.liberofiles.core.FileEngineTest" time="0.007" />
+  <testcase name="diskFullCannotDamageOldFile" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="conflictingRenameLeavesFilesIntact" classname="it.liberofiles.core.FileEngineTest" time="0.002" />
+  <testcase name="spaceReportCountsRealBytes" classname="it.liberofiles.core.FileEngineTest" time="0.007" />
+  <testcase name="copyKeepsSource" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="symlinkInsideDirectoryAbortsBeforeSourceDeletion" classname="it.liberofiles.core.FileEngineTest" time="0.002" />
+  <testcase name="emptyFileCanBeCopiedAndMoved" classname="it.liberofiles.core.FileEngineTest" time="0.004" />
+  <testcase name="failedPublicationRestoresReplacedFile" classname="it.liberofiles.core.FileEngineTest" time="0.004" />
+  <testcase name="sameSizeSourceModificationIsDetected" classname="it.liberofiles.core.FileEngineTest" time="0.002" />
+  <testcase name="verifiedCrossStorageMove" classname="it.liberofiles.core.FileEngineTest" time="0.018" />
+  <testcase name="zipRoundTrip" classname="it.liberofiles.core.FileEngineTest" time="0.008" />
+  <testcase name="newFileDuringDirectoryMoveIsPreserved" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="directoryMove" classname="it.liberofiles.core.FileEngineTest" time="0.006" />
+  <testcase name="rejectsSymlinks" classname="it.liberofiles.core.FileEngineTest" time="0.001" />
+  <testcase name="renamePreviewAndCommit" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="rejectsOwnDescendant" classname="it.liberofiles.core.FileEngineTest" time="0.001" />
+  <testcase name="duplicateZipEntriesRejected" classname="it.liberofiles.core.FileEngineTest" time="0.001" />
+  <testcase name="journalSurvivesReopening" classname="it.liberofiles.core.FileEngineTest" time="0.001" />
+  <testcase name="keepsBothOrSkips" classname="it.liberofiles.core.FileEngineTest" time="0.003" />
+  <testcase name="syncFailureDoesNotRemoveSource" classname="it.liberofiles.core.FileEngineTest" time="0.002" />
+  </testsuite>

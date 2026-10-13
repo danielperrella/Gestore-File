@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="it.liberofiles.app.MainActivityTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-13T21:04:10" time="1.894">
+  <properties />
+  <testcase name="lightThemeAndLargeFontCanStart" classname="it.liberofiles.app.MainActivityTest" time="1.24" />
+  <testcase name="lateRecoveryResultCannotOpenDialogOnDestroyedActivity" classname="it.liberofiles.app.MainActivityTest" time="0.142" />
+  <testcase name="startsWithPermissionExplanation" classname="it.liberofiles.app.MainActivityTest" time="0.103" />
+  <testcase name="manifestHasNoNetworkAndNoExportedFileProvider" classname="it.liberofiles.app.MainActivityTest" time="0.071" />
+  <testcase name="revokingStorageAccessHidesPreviouslyLoadedEntries" classname="it.liberofiles.app.MainActivityTest" time="0.228" />
+  <testcase name="grantedStorageListsRealFixtureAsynchronously" classname="it.liberofiles.app.MainActivityTest" time="0.11" />
+  </testsuite>

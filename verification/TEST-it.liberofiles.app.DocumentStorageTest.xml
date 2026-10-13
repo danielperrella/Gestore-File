@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="it.liberofiles.app.DocumentStorageTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-13T21:03:55" time="15.214">
+  <properties />
+  <testcase name="creatingManyStagedChildrenDoesNotScanTheWholeFolderForEachFile" classname="it.liberofiles.app.DocumentStorageTest" time="15.054" />
+  <testcase name="newDestinationFileCannotBeOverwrittenByStaleIndex" classname="it.liberofiles.app.DocumentStorageTest" time="0.121" />
+  <testcase name="verifiedMoveThroughDocumentsContract" classname="it.liberofiles.app.DocumentStorageTest" time="0.038" />
+  </testsuite>

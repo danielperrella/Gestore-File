@@ -1,0 +1,2 @@
+-keep class it.liberofiles.app.ShareProvider { *; }
+-keepattributes Signature,InnerClasses,EnclosingMethod
