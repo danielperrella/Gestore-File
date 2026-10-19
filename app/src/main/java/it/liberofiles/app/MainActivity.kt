@@ -21,6 +21,8 @@ import java.util.Date
 import kotlin.math.roundToInt
 
 class MainActivity : Activity() {
+    private val updater by lazy { AppUpdater(this) }
+    private var updateBusy = false
     private val graph get() = (application as FilesApplication).graph
     private var current: Node? = null
     private var entries = emptyList<Entry>()
@@ -71,6 +73,7 @@ class MainActivity : Activity() {
         current = if (savedStore != null && savedId != null) Node(savedStore, savedId) else graph.local.rootNode
         buildLayout()
         if (current?.store == "local" && !Environment.isExternalStorageManager()) showPermissionScreen() else navigate(current!!)
+        if (savedInstanceState == null) checkUpdates(false)
         revision = graph.state.revision
         if (savedInstanceState == null) graph.reads.execute {
             val records = graph.journal.pending()
@@ -128,6 +131,7 @@ class MainActivity : Activity() {
     private fun canUseUi() = !isFinishing && !isDestroyed
     override fun onResume() {
         super.onResume()
+        updater.resume()
         if (::body.isInitialized && current?.store == "local") {
             val allowed = Environment.isExternalStorageManager()
             if (!allowed && !waitingForPermission) showPermissionScreen()
@@ -336,7 +340,7 @@ class MainActivity : Activity() {
         collection = null; body.removeAllViews(); crumbs.removeAllViews(); status.text = "Accesso alla memoria da autorizzare"
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(28), dp(24), dp(28), dp(24)) }
         content.addView(label("I tuoi file.\nSenza distrazioni.", 30f, bold = true))
-        content.addView(label("Per gestire la memoria interna autorizza l'accesso ai file nelle impostazioni Android. Per USB puoi scegliere una cartella dal selettore di sistema.\n\nNessun account. Nessun accesso a Internet.", 15f, muted).apply { setPadding(0, dp(20), 0, dp(20)) })
+        content.addView(label("Per gestire la memoria interna autorizza l'accesso ai file nelle impostazioni Android. Per USB puoi scegliere una cartella dal selettore di sistema.\n\nNessun account. Internet solo per gli aggiornamenti; i tuoi file restano sul dispositivo.", 15f, muted).apply { setPadding(0, dp(20), 0, dp(20)) })
         content.addView(button("Autorizza memoria interna") {
             try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))) }
             catch (_: ActivityNotFoundException) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
@@ -544,15 +548,62 @@ class MainActivity : Activity() {
             .setIcon(Icon.createWithResource(this, R.drawable.ic_app)).setIntent(intent).build()
         manager.requestPinShortcut(shortcut, null)
     }
+    fun updateInstallError() {
+        if (canUseUi()) toast("Impossibile aprire l’installer. Riprova da Impostazioni → Controlla aggiornamenti.")
+    }
+
+    private fun checkUpdates(manual: Boolean) {
+        if (updateBusy) return
+        updateBusy = true
+        Thread {
+            try {
+                val result = updater.check()
+                runOnUiThread {
+                    updateBusy = false
+                    if (!canUseUi()) return@runOnUiThread
+                    if (result.getBoolean("available")) {
+                        AlertDialog.Builder(this).setTitle("Gestore File ${result.getString("versionName")}")
+                            .setMessage("È disponibile un aggiornamento.\n\n${result.optString("notes")}\n\nAndroid chiederà conferma per installarlo. I tuoi dati vengono conservati.")
+                            .setNegativeButton("Più tardi", null)
+                            .setPositiveButton("Aggiorna") { _, _ -> downloadUpdate() }.show()
+                    } else if (manual) toast("Gestore File è aggiornato")
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    updateBusy = false
+                    if (manual && canUseUi()) toast("Controllo non riuscito. Verifica la connessione e riprova.")
+                }
+            }
+        }.start()
+    }
+
+    private fun downloadUpdate() {
+        if (updateBusy) return
+        updateBusy = true
+        toast("Download aggiornamento…")
+        Thread {
+            try {
+                val result = updater.downloadAndInstall()
+                runOnUiThread {
+                    if (canUseUi() && result.getString("status") == "permission")
+                        toast("Autorizza Gestore File a installare app, poi torna qui per continuare.")
+                }
+            } catch (e: Exception) {
+                runOnUiThread { if (canUseUi()) toast(e.message ?: "Download non riuscito. Riprova.") }
+            } finally { runOnUiThread { updateBusy = false } }
+        }.start()
+    }
+
     private fun settings() {
-        val labels = arrayOf(if (dark) "Tema chiaro" else "Tema scuro", "Dimensione caratteri", "Verifica completa anche nelle copie: ${if (graph.preferences.getBoolean("verifyCopy", false)) "sì" else "no"}", "Privacy e sicurezza", "Operazioni interrotte")
+        val labels = arrayOf(if (dark) "Tema chiaro" else "Tema scuro", "Dimensione caratteri", "Verifica completa anche nelle copie: ${if (graph.preferences.getBoolean("verifyCopy", false)) "sì" else "no"}", "Privacy e sicurezza", "Operazioni interrotte", "Controlla aggiornamenti")
         AlertDialog.Builder(this).setTitle("Impostazioni").setItems(labels) { _, i -> when (i) {
             0 -> { graph.preferences.edit().putBoolean("dark", !dark).apply(); recreate() }
             1 -> AlertDialog.Builder(this).setTitle("Caratteri").setItems(arrayOf("Compatto", "Normale", "Grande", "Molto grande")) { _, index ->
                 graph.preferences.edit().putFloat("font", floatArrayOf(.9f, 1f, 1.15f, 1.3f)[index]).apply(); recreate()
             }.show()
             2 -> { val old = graph.preferences.getBoolean("verifyCopy", false); graph.preferences.edit().putBoolean("verifyCopy", !old).apply(); toast(if (old) "Copie: controllo dimensione" else "Copie: verifica SHA-256 completa") }
-            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Nessun permesso Internet, pubblicità, account o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino solo locale, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione 0.1.1 (prova)").setPositiveButton("Chiudi", null).show()
+            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Internet usato solo per controllare e scaricare aggiornamenti da GitHub Pages. Nessuna pubblicità, account o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino solo locale, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione 0.2.0 (prova)").setPositiveButton("Chiudi", null).show()
+            5 -> checkUpdates(true)
             4 -> graph.reads.execute { val records = graph.journal.pending(); graph.main.post { if (!canUseUi()) return@post
  recoveryDialog(records) } }
         } }.show()

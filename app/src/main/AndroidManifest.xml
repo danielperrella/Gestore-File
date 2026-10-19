@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -13,5 +15,6 @@
         </activity>
         <service android:name=".OperationService" android:exported="false" android:foregroundServiceType="dataSync" />
         <provider android:name=".ShareProvider" android:authorities="it.liberofiles.app.files" android:exported="false" android:grantUriPermissions="true" />
+        <provider android:name=".UpdateProvider" android:authorities="it.liberofiles.app.updates" android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

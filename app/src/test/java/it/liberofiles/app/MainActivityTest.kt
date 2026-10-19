@@ -33,7 +33,7 @@ class MainActivityTest {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val values = texts(controller.get().window.decorView)
         assertTrue(values.any { it == "Autorizza memoria interna" })
-        assertTrue(values.any { it.contains("Nessun accesso a Internet") })
+        assertTrue(values.any { it.contains("Internet solo per gli aggiornamenti") })
         controller.pause().stop().destroy()
     }
     @Test fun lightThemeAndLargeFontCanStart() {
@@ -56,10 +56,13 @@ class MainActivityTest {
         assertTrue("Folder entries must reach the UI", found)
         controller.pause().stop().destroy()
     }
-    @Test fun manifestHasNoNetworkAndNoExportedFileProvider() {
+    @Test fun manifestAllowsUpdatesAndKeepsFileProvidersPrivate() {
         val context = RuntimeEnvironment.getApplication()
         val permissions = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
-        assertFalse(permissions.contains("android.permission.INTERNET"))
+        assertTrue(permissions.contains("android.permission.INTERNET"))
+        assertTrue(permissions.contains("android.permission.REQUEST_INSTALL_PACKAGES"))
+        val updates = context.packageManager.resolveContentProvider("${context.packageName}.updates", 0)!!
+        assertFalse(updates.exported); assertTrue(updates.grantUriPermissions)
         val provider = context.packageManager.resolveContentProvider(ShareProvider.AUTHORITY, 0)!!
         assertFalse(provider.exported); assertTrue(provider.grantUriPermissions)
     }

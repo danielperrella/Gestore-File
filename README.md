@@ -1,6 +1,16 @@
 # Gestore File — Android / Kotlin
 
-Gestore file locale per Android 11 e successivi, progettato per Xiaomi 11T Pro con Android 14. Versione di prova **0.1.1**: il codice e il motore sono verificabili; la compatibilità con il telefono e con la specifica chiavetta USB va provata sul dispositivo.
+Gestore file locale per Android 11 e successivi, progettato per Xiaomi 11T Pro con Android 14. Versione di prova **0.2.0**: il codice e il motore sono verificabili; la compatibilità con il telefono e con la specifica chiavetta USB va provata sul dispositivo.
+
+## Download e aggiornamenti
+
+[Scarica APK Android](https://danielperrella.github.io/Gestore-File/gestorefile.apk) · [Pagina di download](https://danielperrella.github.io/Gestore-File/) · [Release GitHub](https://github.com/danielperrella/Gestore-File/releases)
+
+All’apertura l’app controlla gli aggiornamenti senza bloccare la navigazione. Propone **Aggiorna / Più tardi**, scarica l’APK nella cache privata e verifica dimensione, SHA-256, pacchetto, versione superiore e corrispondenza della firma installata. Android gestisce l’autorizzazione e la conferma finale. Controllo manuale: **Impostazioni → Controlla aggiornamenti**. Senza rete il controllo automatico resta silenzioso e l’app continua a funzionare.
+
+Internet serve solo per gli aggiornamenti da `https://danielperrella.github.io/Gestore-File/`. I file dell’utente non vengono inviati. `REQUEST_INSTALL_PACKAGES` permette di aprire l’installer dopo la scelta dell’utente; Android richiede conferma.
+
+La 0.2.0 mantiene pacchetto e firma della 0.1.1 originale: installala sopra la precedente senza disinstallare. Resta una versione di prova con la chiave originale di sviluppo, conservata solo localmente e mai pubblicata.
 
 ## Modifiche nella versione 0.1.1
 
@@ -28,11 +38,11 @@ La chiusura dell'installer sul telefono non è ancora diagnosticata: verifica de
 - Apertura e condivisione tramite altre app, accesso concesso in sola lettura. Nessun lettore interno.
 - Tema scuro/chiaro, dimensione caratteri, supporto al ridimensionamento del testo di Android, descrizioni accessibili e scorciatoie alle cartelle sulla Home.
 
-**Esclusi:** pubblicità, tracciamento, permesso Internet, account, cloud, ricerca, root, editor, metadati multimediali, duplicati, pulizia automatica, sincronizzazione, rete, cassaforte e strumenti APK.
+**Esclusi:** pubblicità, tracciamento, account, cloud, ricerca, root, editor, metadati multimediali, duplicati, pulizia automatica, sincronizzazione, rete, cassaforte e strumenti APK.
 
 ## Installazione dell'APK
 
-1. Scarica `GestoreFile-0.1.1-installazione.zip`, estrai `GestoreFile-0.1.1.apk` nella cartella Download e apri il file estratto dal gestore Xiaomi. Quando richiesto da Android, autorizza l'installazione dalla sola app con cui lo stai aprendo.
+1. Scarica [gestorefile.apk](https://danielperrella.github.io/Gestore-File/gestorefile.apk) e aprilo dal gestore Xiaomi. Quando richiesto da Android, autorizza l'installazione dalla sola app con cui lo stai aprendo.
 2. Apri **Gestore File**. È un'app separata dal gestore Xiaomi e non ne sostituisce il pacchetto.
 3. Premi **Autorizza memoria interna** e abilita l'accesso ai file per Gestore File.
 4. Per USB: collega la chiavetta, scegli **Le tue posizioni → Aggiungi USB / cartella**, seleziona la memoria e concedi l'accesso alla cartella.
@@ -50,7 +60,7 @@ Apri questa cartella in Android Studio. Toolchain fissata per riproducibilità: 
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
 ```
 
-Windows: `gradlew.bat` con gli stessi argomenti. Android Studio richiede una connessione per scaricare gli strumenti; **l'app installata non ha accesso a Internet**.
+Windows: `gradlew.bat` con gli stessi argomenti. Android Studio richiede una connessione per scaricare gli strumenti; **l'app installata usa Internet soltanto per gli aggiornamenti**.
 
 Il repository non contiene chiavi private. Le build debug e release usano la chiave debug locale generata da Android Gradle Plugin. Se disponi della chiave originale inclusa nello ZIP del progetto consegnato, puoi copiarla localmente in `signing/development.jks` (alias/password di sviluppo `androiddebugkey` / `android`): Gradle la userà per mantenere la firma dell'APK in `dist/`. Il file è escluso da Git.
 
@@ -92,9 +102,21 @@ Il cestino è nella cartella nascosta `.LiberoFilesTrash` della memoria interna,
 - FAT32 può rifiutare file di circa 4 GiB o più; è un limite del filesystem, non della RAM dell'app.
 - Annullamento cooperativo tra i blocchi: un provider bloccato può ritardarlo. Nessuna ripresa automatica dopo l'arresto del processo; l'originale viene conservato e i residui sono segnalati.
 - Il servizio dataSync rispetta il timeout previsto da Android 15 e successivi.
-- L'app non cancella cache private di altre app, non installa APK e non modifica i contenuti dei file aperti con app esterne.
+- L'app non cancella cache private di altre app, non modifica i contenuti dei file aperti con app esterne.
 - Date di modifica e permessi non vengono replicati come in un backup completo: viene preservato il contenuto, non ogni metadato del filesystem.
 
 ## Verifiche
 
 I test JVM esercitano copie/spostamenti, integrità, cancellazione, conflitti, errori di scrittura, rollback, ZIP Slip, mutazioni dell'origine, rinomina, cestino e persistenza del registro. Il documento `RISULTATI_VERIFICA.md` registra solo verifiche effettivamente eseguite. I test del core non sostituiscono una prova su Android e USB reali.
+
+
+## Pubblicare un aggiornamento
+
+1. Incrementa `versionCode` e `versionName` in `app/build.gradle.kts`.
+2. Ripristina la stessa chiave originale in `signing/development.jks`, esclusa da Git. Una chiave diversa non può aggiornare l’app distribuita.
+3. Esegui `gradlew.bat :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleRelease`.
+4. Esegui `node scripts/package-release.mjs "Note della versione"` e `node scripts/verify-release.mjs`.
+5. Verifica con `apksigner verify --verbose --print-certs docs/gestorefile.apk` e confronta la firma con la release precedente.
+6. Versiona insieme sorgenti, `docs/gestorefile.apk` e `docs/update.json`, quindi invia su `main`.
+
+GitHub Actions esegue test e lint, controlla hash, pacchetto, versione e firma valida dell’APK e pubblica `docs/` su GitHub Pages. Distribuisce l’APK già firmato: nessuna chiave privata entra in GitHub. Le build debug di CI non vengono distribuite.
