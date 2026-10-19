@@ -1,12 +1,32 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#70DDC5</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#95B5FF</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#101515</item>
-        <item name="android:navigationBarColor">#101515</item>
-        <item name="android:statusBarColor">#101515</item>
+        <item name="android:windowBackground">#121927</item>
+        <item name="android:navigationBarColor">#121927</item>
+        <item name="android:statusBarColor">#121927</item>
+        <item name="android:alertDialogTheme">@style/FileDialogDark</item>
+    </style>
+    <style name="AppThemeLight" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#2459E0</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">#F4F7FC</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:alertDialogTheme">@style/FileDialogLight</item>
+    </style>
+    <style name="FileDialogLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#2459E0</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowBackground">@drawable/dialog_light</item>
+    </style>
+    <style name="FileDialogDark" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">#95B5FF</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowBackground">@drawable/dialog_dark</item>
     </style>
 </resources>

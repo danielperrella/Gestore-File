@@ -10,6 +10,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Icon
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
@@ -43,15 +45,19 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var jobLine: LinearLayout
     private lateinit var jobText: TextView
+    private lateinit var selectionBar: LinearLayout
     private var collection: AbsListView? = null
     private var waitingForPermission = false
-    private var dark = true
+    private var dark = false
     private var font = 1f
-    private var bg = Color.rgb(16, 21, 21)
-    private var panel = Color.rgb(27, 35, 35)
-    private var ink = Color.rgb(236, 244, 242)
-    private var muted = Color.rgb(150, 171, 165)
-    private var accent = Color.rgb(112, 221, 197)
+    private var bg = Color.rgb(18, 25, 39)
+    private var panel = Color.rgb(26, 36, 54)
+    private var ink = Color.rgb(232, 238, 249)
+    private var muted = Color.rgb(161, 175, 198)
+    private var accent = Color.rgb(149, 181, 255)
+    private var lineColor = Color.rgb(44, 58, 80)
+    private var softBlue = Color.rgb(36, 55, 86)
+    private var folderColor = Color.rgb(235, 183, 73)
     private var hidden = false
     private var grid = false
     private var sort = "name"
@@ -59,15 +65,19 @@ class MainActivity : Activity() {
     private val observer: (JobState) -> Unit = { showJob(it) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        dark = graph.preferences.getBoolean("dark", true)
-        if (!dark) setTheme(android.R.style.Theme_Material_Light_NoActionBar)
+        dark = graph.preferences.getBoolean("dark", false)
+        setTheme(if (dark) R.style.AppTheme else R.style.AppThemeLight)
         super.onCreate(savedInstanceState)
         font = graph.preferences.getFloat("font", 1f)
         hidden = graph.preferences.getBoolean("hidden", false)
         grid = graph.preferences.getBoolean("grid", false)
         sort = graph.preferences.getString("sort", "name") ?: "name"
         descending = graph.preferences.getBoolean("descending", false)
-        if (!dark) { bg = Color.rgb(245, 248, 247); panel = Color.WHITE; ink = Color.rgb(20, 42, 37); muted = Color.rgb(82, 106, 98); accent = Color.rgb(0, 117, 92) }
+        if (!dark) {
+            bg = Color.rgb(244, 247, 252); panel = Color.WHITE; ink = Color.rgb(24, 37, 54)
+            muted = Color.rgb(96, 111, 132); accent = Color.rgb(36, 89, 224)
+            lineColor = Color.rgb(224, 231, 241); softBlue = Color.rgb(232, 239, 255); folderColor = Color.rgb(185, 130, 26)
+        }
         val savedStore = savedInstanceState?.getString("store") ?: intent.getStringExtra("store")
         val savedId = savedInstanceState?.getString("node") ?: intent.getStringExtra("node")
         current = if (savedStore != null && savedId != null) Node(savedStore, savedId) else graph.local.rootNode
@@ -89,31 +99,45 @@ class MainActivity : Activity() {
             val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
         }
-        val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(14), dp(12), dp(8)) }
+        val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(20), dp(14), dp(14), dp(14)); setBackgroundColor(panel) }
+        heading.addView(ImageView(this).apply { setImageDrawable(UiIcon("folder", accent, dp(28))); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { rightMargin = dp(12) })
         val titleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titleBox.addView(label(getString(R.string.app_name), 24f, bold = true))
-        titleBox.addView(label("LOCALE · SENZA PUBBLICITÀ", 10f, muted).apply { letterSpacing = .12f })
+        titleBox.addView(label(getString(R.string.app_name), 20f, bold = true))
+        titleBox.addView(label("Il tuo spazio, in ordine", 12f, muted))
         heading.addView(titleBox, LinearLayout.LayoutParams(0, -2, 1f))
-        heading.addView(button("☰", "Memorie, preferiti e recenti") { locations() })
-        heading.addView(button("⋮", "Menu della cartella") { menu() })
+        heading.addView(iconButton("settings", "Impostazioni") { settings() })
         root.addView(heading)
-        val nav = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(12), 0) }
-        nav.addView(button("↑", "Cartella superiore") { up() })
-        location = label("Memoria interna", 18f, bold = true).apply { setOnClickListener { locations() }; setPadding(dp(6), dp(8), 0, dp(8)) }
+        val nav = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(20), dp(16), dp(6)) }
+        nav.addView(iconButton("up", "Cartella superiore") { up() })
+        location = label("Memoria interna", 26f, bold = true).apply { setOnClickListener { locations() }; setPadding(dp(6), dp(8), 0, dp(8)); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }
         nav.addView(location, LinearLayout.LayoutParams(0, -2, 1f))
-        nav.addView(button("+", "Crea cartella") { newFolder() })
+        nav.addView(iconButton("plus", "Crea cartella", true) { newFolder() })
         root.addView(nav)
         val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-        crumbs = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), 0, dp(12), 0) }
+        crumbs = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(20), 0, dp(20), 0) }
         scroll.addView(crumbs); root.addView(scroll)
-        status = label("", 12f, muted).apply { setPadding(dp(18), dp(8), dp(18), dp(8)); accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
-        root.addView(status)
+        val tools = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(22), dp(8), dp(12), dp(8)) }
+        status = label("", 12f, muted).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        tools.addView(status, LinearLayout.LayoutParams(0,-2,1f))
+        tools.addView(iconButton("sort", "Ordina file") { sorting() })
+        val viewToggle = iconButton(if (grid) "list" else "grid", if (grid) "Mostra elenco" else "Mostra griglia") {}
+        viewToggle.setOnClickListener {
+            grid = !grid; graph.preferences.edit().putBoolean("grid", grid).apply()
+            viewToggle.setImageDrawable(UiIcon(if (grid) "list" else "grid", accent, dp(22)))
+            viewToggle.contentDescription = if (grid) "Mostra elenco" else "Mostra griglia"
+            if (waitingForPermission) showPermissionScreen() else renderEntries()
+        }
+        tools.addView(viewToggle)
+        tools.addView(iconButton("more", "Menu della cartella") { menu() })
+        root.addView(tools)
         jobLine = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(4), dp(8), dp(4)); background = shape(panel); visibility = View.GONE }
         jobText = label("", 12f).apply { maxLines = 2 }
         jobLine.addView(jobText, LinearLayout.LayoutParams(0, -2, 1f))
         jobLine.addView(button("Annulla") { graph.cancellation?.cancel(); graph.pending.clear() })
         root.addView(jobLine)
         body = FrameLayout(this); root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
+        selectionBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); setBackgroundColor(softBlue); visibility = View.GONE }
+        root.addView(selectionBar)
         bottom = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), dp(6), dp(8), dp(8)); setBackgroundColor(panel) }
         root.addView(bottom)
         setContentView(root)
@@ -204,9 +228,10 @@ class MainActivity : Activity() {
         if (visible.isEmpty()) { showEmpty("Cartella vuota"); updateActions(); return }
         val oldPosition = collection?.firstVisiblePosition ?: 0
         body.removeAllViews()
-        val list: AbsListView = if (grid) GridView(this).apply { numColumns = 2; horizontalSpacing = dp(8); verticalSpacing = dp(8); setPadding(dp(12), 0, dp(12), 0) }
-            else ListView(this).apply { divider = null; dividerHeight = 0; setPadding(dp(10), 0, dp(10), 0) }
+        val list: AbsListView = if (grid) GridView(this).apply { numColumns = GridView.AUTO_FIT; columnWidth = dp(152); stretchMode = GridView.STRETCH_COLUMN_WIDTH; horizontalSpacing = dp(10); verticalSpacing = dp(10); setPadding(dp(16), 0, dp(16), dp(16)); clipToPadding = false }
+            else ListView(this).apply { divider = android.graphics.drawable.ColorDrawable(lineColor); dividerHeight = dp(1); setPadding(dp(16), 0, dp(16), dp(16)); clipToPadding = false }
         list.adapter = FileAdapter(visible)
+        if (!grid) list.background = shape(panel)
         list.setOnItemClickListener { _, _, position, _ ->
             val entry = visible[position]
             if (selected.isNotEmpty()) { toggle(entry.node) }
@@ -231,17 +256,25 @@ class MainActivity : Activity() {
             val row = (convertView as? LinearLayout) ?: LinearLayout(this@MainActivity).apply {
                 orientation = if (grid) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12))
-                val icon = label("", 15f, accent, true).apply { gravity = Gravity.CENTER; typeface = Typeface.MONOSPACE }
-                addView(icon, LinearLayout.LayoutParams(if (grid) -1 else dp(48), dp(42)))
+                val icon = ImageView(this@MainActivity).apply { setPadding(dp(10), dp(10), dp(10), dp(10)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+                addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)))
                 val texts = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(if (grid) 0 else dp(10), if (grid) dp(6) else 0, 0, 0) }
-                texts.addView(label("", 15f, bold = true).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
-                texts.addView(label("", 11f, muted).apply { maxLines = 2 })
+                texts.addView(label("", 16f, bold = true).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
+                texts.addView(label("", 12f, muted).apply { maxLines = 2; setPadding(0,dp(4),0,0) })
                 addView(texts, if (grid) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
-                minimumHeight = dp(if (grid) 132 else 80)
+                if (!grid) addView(ImageView(this@MainActivity).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { leftMargin = dp(8) })
+                minimumHeight = dp(if (grid) 150 else 84)
             }
-            row.background = shape(if (entry.node in selected) if (dark) Color.rgb(35, 77, 66) else Color.rgb(199, 237, 222) else if (grid) panel else bg)
-            val icon = row.getChildAt(0) as TextView
-            icon.text = if (entry.node in selected) "✓" else if (entry.directory) "DIR" else entry.name.substringAfterLast('.', "FILE").take(4).uppercase()
+            row.background = GradientDrawable().apply { setColor(if (entry.node in selected) softBlue else panel); cornerRadius = if (grid) dp(14).toFloat() else 0f }
+            val icon = row.getChildAt(0) as ImageView
+            val extension = entry.name.substringAfterLast('.', "").lowercase()
+            val kind = when { entry.node in selected -> "check"; entry.directory -> "folder"; extension == "zip" -> "zip"; extension in listOf("jpg","jpeg","png","webp","gif") -> "image"; extension in listOf("mp3","wav","m4a","flac") -> "music"; extension == "pdf" -> "pdf"; else -> "file" }
+            val iconColor = when { entry.node in selected -> accent; entry.directory -> folderColor; extension == "pdf" -> if (dark) Color.rgb(255,170,164) else Color.rgb(183,67,58); else -> accent }
+            icon.setImageDrawable(UiIcon(kind, iconColor, dp(28)))
+            icon.background = shape(if (entry.directory && entry.node !in selected) if (dark) Color.rgb(62,49,28) else Color.rgb(255,244,215) else softBlue)
+            if (!grid) (row.getChildAt(2) as ImageView).apply {
+                setImageDrawable(if (selected.isNotEmpty()) UiIcon(if (entry.node in selected) "check" else "plus", accent, dp(20)) else if (entry.directory) UiIcon("move", muted, dp(20)) else null)
+            }
             val texts = row.getChildAt(1) as LinearLayout
             (texts.getChildAt(0) as TextView).text = entry.name
             (texts.getChildAt(1) as TextView).text = if (entry.directory) "Cartella" else "${formatBytes(entry.size)}${entry.modified?.let { " · ${dateFormatter.format(Date(it))}" } ?: ""}"
@@ -255,9 +288,11 @@ class MainActivity : Activity() {
         val path = ArrayList<Node>(); var cursor: Node? = node
         try { val stores = graph.stores(); while (cursor != null && path.size < 128) { path.add(cursor); cursor = stores[cursor].parent(cursor) } }
         catch (_: Exception) { path.add(node) }
+        crumbs.visibility = if (path.size <= 1) View.GONE else View.VISIBLE
         for ((i, part) in path.asReversed().withIndex()) {
             if (i > 0) crumbs.addView(label("›", 12f, muted))
             crumbs.addView(label(displayName(part), 12f, if (part == node) accent else muted).apply {
+                minimumHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
                 setPadding(dp(6), dp(8), dp(6), dp(8)); setOnClickListener { navigate(part) }
             })
         }
@@ -272,15 +307,41 @@ class MainActivity : Activity() {
     private fun updateActions() {
         if (!::bottom.isInitialized) return
         bottom.removeAllViews()
-        fun add(text: String, action: () -> Unit) { bottom.addView(button(text, action = action), LinearLayout.LayoutParams(0, dp(48), 1f)) }
+        selectionBar.removeAllViews()
+        selectionBar.visibility = if (selected.isNotEmpty() || graph.clipboard.isNotEmpty()) View.VISIBLE else View.GONE
+        fun nav(kind: String, text: String, action: () -> Unit) {
+            val item = button(text, action = action).apply {
+                textSize = 11f * font; setTextColor(muted); minimumHeight = dp(64)
+                setCompoundDrawablesWithIntrinsicBounds(null, UiIcon(kind, muted, dp(22)), null, null)
+                compoundDrawablePadding = dp(5)
+            }
+            bottom.addView(item, LinearLayout.LayoutParams(0,-2,1f))
+        }
+        nav("home", "Posizioni") { locations() }
+        nav("star", "Preferiti") { savedLocations("favorites", "Preferiti") }
+        nav("clock", "Recenti") { savedLocations("recent", "Cartelle recenti") }
+        nav("trash", "Cestino") { trashDialog() }
+        if (selectionBar.visibility != View.VISIBLE) return
+        val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        heading.addView(label(if (selected.isNotEmpty()) "${selected.size} selezionati" else "${graph.clipboard.size} elementi da incollare", 14f, accent, true), LinearLayout.LayoutParams(0,-2,1f))
+        heading.addView(iconButton("close", if (selected.isNotEmpty()) "Annulla selezione" else "Svuota appunti") {
+            if (selected.isNotEmpty()) { selected.clear(); refreshSelection() } else { graph.clipboard = emptyList(); updateActions() }
+        })
+        selectionBar.addView(heading)
+        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(actions) }
+        selectionBar.addView(scroll)
+        fun add(kind: String, text: String, action: () -> Unit) {
+            actions.addView(button(text, action = action).apply {
+                setCompoundDrawablesWithIntrinsicBounds(UiIcon(kind, accent, dp(19)),null,null,null)
+                compoundDrawablePadding = dp(7)
+            })
+        }
         if (selected.isNotEmpty()) {
-            add("Copia") { clipboard(false) }; add("Sposta") { clipboard(true) }; add("Elimina") { deleteSelected() }; add("Altro") { selectionMenu() }
-        } else if (graph.clipboard.isNotEmpty()) {
-            add("Incolla (${graph.clipboard.size})") { paste() }; add("Svuota") { graph.clipboard = emptyList(); updateActions() }
+            add("copy", "Copia") { clipboard(false) }; add("move", "Sposta") { clipboard(true) }; add("trash", "Elimina") { deleteSelected() }; add("more", "Altro") { selectionMenu() }
         } else {
-            add("Preferiti") { savedLocations("favorites", "Preferiti") }; add(if (grid) "Elenco" else "Griglia") {
-                grid = !grid; graph.preferences.edit().putBoolean("grid", grid).apply(); renderEntries()
-            }; add("Ordina") { sorting() }
+            add("paste", "Incolla qui") { paste() }
+            actions.addView(label("Scegli la cartella di destinazione", 12f, muted))
         }
     }
     private fun menu() {
@@ -306,14 +367,16 @@ class MainActivity : Activity() {
     }
     private fun locations() {
         val roots = graph.roots(); val labels = roots.map { it.first } + listOf("Aggiungi USB / cartella", "Preferiti", "Recenti", "Cestino", "Rimuovi una memoria autorizzata")
-        AlertDialog.Builder(this).setTitle("Le tue posizioni").setItems(labels.toTypedArray()) { _, which -> when {
+        val subtitles = roots.map { if (it.second.store == "local") "Cartelle e file sul dispositivo" else "Memoria autorizzata" } + listOf("Collega una memoria dal selettore Android", "Le cartelle che hai salvato", "Riprendi dalle ultime cartelle aperte", "Recupera i file della memoria interna", "Revoca l’accesso senza eliminare file")
+        val icons = roots.map { if (it.second.store == "local") "home" else "usb" } + listOf("plus", "star", "clock", "trash", "close")
+        optionDialog("Le tue posizioni", labels, subtitles, icons) { which -> when {
             which < roots.size -> navigate(roots[which].second)
             which == roots.size -> selectTree()
             which == roots.size + 1 -> savedLocations("favorites", "Preferiti")
             which == roots.size + 2 -> savedLocations("recent", "Cartelle recenti")
             which == roots.size + 3 -> trashDialog()
             else -> removeTreeDialog()
-        } }.show()
+        } }
     }
     private fun savedLocations(key: String, title: String) {
         val nodes = graph.nodes(key)
@@ -338,15 +401,17 @@ class MainActivity : Activity() {
         loadGeneration++; presentationGeneration++
         entries = emptyList(); presented = emptyList(); selected.clear(); cache.evictAll()
         collection = null; body.removeAllViews(); crumbs.removeAllViews(); status.text = "Accesso alla memoria da autorizzare"
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(28), dp(24), dp(28), dp(24)) }
-        content.addView(label("I tuoi file.\nSenza distrazioni.", 30f, bold = true))
+        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(28), dp(28), dp(28), dp(28)) }
+        content.addView(ImageView(this).apply { setImageDrawable(UiIcon("folder",folderColor,dp(60))); setPadding(dp(16),dp(16),dp(16),dp(16)); background = shape(softBlue) }, LinearLayout.LayoutParams(dp(88),dp(88)).apply { bottomMargin = dp(24) })
+        content.addView(label("Tutto comincia\ndai tuoi file.", 32f, bold = true))
         content.addView(label("Per gestire la memoria interna autorizza l'accesso ai file nelle impostazioni Android. Per USB puoi scegliere una cartella dal selettore di sistema.\n\nNessun account. Internet solo per gli aggiornamenti; i tuoi file restano sul dispositivo.", 15f, muted).apply { setPadding(0, dp(20), 0, dp(20)) })
         content.addView(button("Autorizza memoria interna") {
             try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))) }
             catch (_: ActivityNotFoundException) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
-        })
+        }.apply { setTextColor(if (dark) bg else Color.WHITE); background = RippleDrawable(ColorStateList.valueOf(softBlue),shape(accent),shape(Color.WHITE)) }, LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(12) })
         content.addView(button("Scegli USB / cartella") { selectTree() })
-        body.addView(content, FrameLayout.LayoutParams(-1, -1)); updateActions()
+        scroll.addView(content); body.addView(scroll, FrameLayout.LayoutParams(-1, -1)); updateActions()
     }
     private fun selectTree() {
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
@@ -596,17 +661,35 @@ class MainActivity : Activity() {
 
     private fun settings() {
         val labels = arrayOf(if (dark) "Tema chiaro" else "Tema scuro", "Dimensione caratteri", "Verifica completa anche nelle copie: ${if (graph.preferences.getBoolean("verifyCopy", false)) "sì" else "no"}", "Privacy e sicurezza", "Operazioni interrotte", "Controlla aggiornamenti")
-        AlertDialog.Builder(this).setTitle("Impostazioni").setItems(labels) { _, i -> when (i) {
+        optionDialog("Impostazioni", labels.toList(), listOf("Scegli l’aspetto dell’app", "Adatta la leggibilità", "Controllo SHA-256 aggiuntivo sulle copie", "Permessi, aggiornamenti e protezione dei file", "Verifica copie parziali e residui", "Versione 0.3.0 · Scarica nuove versioni"), listOf("settings", "file", "check", "home", "clock", "move")) { i -> when (i) {
             0 -> { graph.preferences.edit().putBoolean("dark", !dark).apply(); recreate() }
             1 -> AlertDialog.Builder(this).setTitle("Caratteri").setItems(arrayOf("Compatto", "Normale", "Grande", "Molto grande")) { _, index ->
                 graph.preferences.edit().putFloat("font", floatArrayOf(.9f, 1f, 1.15f, 1.3f)[index]).apply(); recreate()
             }.show()
             2 -> { val old = graph.preferences.getBoolean("verifyCopy", false); graph.preferences.edit().putBoolean("verifyCopy", !old).apply(); toast(if (old) "Copie: controllo dimensione" else "Copie: verifica SHA-256 completa") }
-            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Internet usato solo per controllare e scaricare aggiornamenti da GitHub Pages. Nessuna pubblicità, account o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino solo locale, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione 0.2.0 (prova)").setPositiveButton("Chiudi", null).show()
+            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Internet usato solo per controllare e scaricare aggiornamenti da GitHub Pages. Nessuna pubblicità, account o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino solo locale, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione 0.3.0 (prova)").setPositiveButton("Chiudi", null).show()
             5 -> checkUpdates(true)
             4 -> graph.reads.execute { val records = graph.journal.pending(); graph.main.post { if (!canUseUi()) return@post
  recoveryDialog(records) } }
-        } }.show()
+        } }
+    }
+    private fun optionDialog(title: String, titles: List<String>, descriptions: List<String>, icons: List<String>, action: (Int) -> Unit) {
+        val items = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12),dp(4),dp(12),dp(4)) }
+        val scroll = ScrollView(this).apply { addView(items) }
+        val dialog = AlertDialog.Builder(this).setTitle(title).setView(scroll).setNegativeButton("Chiudi",null).create()
+        titles.forEachIndexed { index, text ->
+            val row = LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(76); setPadding(dp(12),dp(12),dp(12),dp(12))
+                isClickable = true; isFocusable = true; background = RippleDrawable(ColorStateList.valueOf(softBlue),shape(Color.TRANSPARENT),shape(Color.WHITE))
+                contentDescription = "$text. ${descriptions[index]}"; setOnClickListener { dialog.dismiss(); action(index) }
+            }
+            row.addView(ImageView(this).apply { setImageDrawable(UiIcon(icons[index],accent,dp(24))); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(28),dp(28)).apply { rightMargin = dp(16) })
+            val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            words.addView(label(text,16f,bold=true))
+            words.addView(label(descriptions[index],12f,muted).apply { setPadding(0,dp(4),0,0) })
+            row.addView(words,LinearLayout.LayoutParams(0,-2,1f)); items.addView(row)
+        }
+        dialog.show()
     }
     private fun recoveryDialog(records: List<Journal.Record>) {
         if (graph.running.get() || graph.pending.isNotEmpty()) { toast("Attendi la fine delle operazioni prima di verificare i residui"); return }
@@ -676,19 +759,35 @@ class MainActivity : Activity() {
         }
     }
     private fun label(text: String, size: Float, color: Int = ink, bold: Boolean = false) = TextView(this).apply {
-        this.text = text; textSize = size * font; setTextColor(color); if (bold) setTypeface(typeface, Typeface.BOLD)
+        this.text = text; textSize = size * font; setTextColor(color)
+        typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
     }
     private fun button(text: String, description: String = text, action: () -> Unit): TextView = label(text, 14f, accent, true).apply {
         gravity = Gravity.CENTER; minimumWidth = dp(48); minimumHeight = dp(48); setPadding(dp(12), dp(8), dp(12), dp(8))
         isClickable = true; isFocusable = true; contentDescription = description
-        val out = android.util.TypedValue(); theme.resolveAttribute(android.R.attr.selectableItemBackground, out, true); setBackgroundResource(out.resourceId)
+        background = RippleDrawable(ColorStateList.valueOf(softBlue), shape(Color.TRANSPARENT), shape(Color.WHITE))
+        setOnClickListener { action() }
+    }
+    private fun iconButton(kind: String, description: String, filled: Boolean = false, action: () -> Unit) = ImageButton(this).apply {
+        minimumWidth = dp(48); minimumHeight = dp(48); setPadding(dp(13),dp(13),dp(13),dp(13))
+        setImageDrawable(UiIcon(kind, if (filled) if (dark) bg else Color.WHITE else accent, dp(22)))
+        contentDescription = description
+        background = RippleDrawable(ColorStateList.valueOf(softBlue), shape(if (filled) accent else Color.TRANSPARENT), shape(Color.WHITE))
         setOnClickListener { action() }
     }
     private fun shape(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(12).toFloat() }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     private fun showEmpty(message: String) {
         body.removeAllViews(); collection = null
-        body.addView(label(message, 16f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(24), dp(16), dp(24), dp(16)) }, FrameLayout.LayoutParams(-1, -1))
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(28),dp(24),dp(28),dp(24)) }
+        if (message.contains("Caricamento")) content.addView(ProgressBar(this), LinearLayout.LayoutParams(dp(40),dp(40)))
+        else content.addView(ImageView(this).apply { setImageDrawable(UiIcon("folder",folderColor,dp(52))) }, LinearLayout.LayoutParams(dp(64),dp(64)))
+        content.addView(label(message, 20f, ink, true).apply { gravity = Gravity.CENTER; setPadding(0,dp(16),0,dp(8)) })
+        if (message == "Cartella vuota") {
+            content.addView(label(if (hidden) "Crea una cartella o incolla qui i tuoi file." else "Crea una cartella, incolla dei file o controlla i file nascosti dal menu.", 14f, muted).apply { gravity = Gravity.CENTER })
+            content.addView(button("Crea cartella") { newFolder() })
+        }
+        body.addView(content, FrameLayout.LayoutParams(-1,-1))
     }
     private fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
     private fun error(message: String) { if (canUseUi()) AlertDialog.Builder(this).setTitle("Operazione non completata").setMessage(message).setPositiveButton("Chiudi", null).show() }
@@ -696,8 +795,9 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle(title).setMessage(message).setNegativeButton("Annulla", null).setPositiveButton("Conferma") { _, _ -> action() }.show()
     }
     private fun prompt(title: String, initial: String, action: (String) -> Unit) {
-        val edit = EditText(this).apply { setText(initial); isSingleLine = true; selectAll() }
-        val dialog = AlertDialog.Builder(this).setTitle(title).setView(edit).setNegativeButton("Annulla", null).setPositiveButton("Conferma", null).create()
+        val edit = EditText(this).apply { setText(initial); isSingleLine = true; selectAll(); setTextColor(ink); textSize = 17f * font; setPadding(dp(14),dp(14),dp(14),dp(14)); background = shape(softBlue); contentDescription = title }
+        val field = FrameLayout(this).apply { setPadding(dp(24),dp(16),dp(24),dp(4)); addView(edit) }
+        val dialog = AlertDialog.Builder(this).setTitle(title).setView(field).setNegativeButton("Annulla", null).setPositiveButton("Conferma", null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             try { val value = validName(edit.text.toString()); action(value); dialog.dismiss() } catch (e: Exception) { edit.error = e.message }
         } }

@@ -1,6 +1,12 @@
 # Gestore File — Android / Kotlin
 
-Gestore file locale per Android 11 e successivi, progettato per Xiaomi 11T Pro con Android 14. Versione di prova **0.2.0**: il codice e il motore sono verificabili; la compatibilità con il telefono e con la specifica chiavetta USB va provata sul dispositivo.
+Gestore file locale per Android 11 e successivi, progettato per Xiaomi 11T Pro con Android 14. Versione di prova **0.3.0**: il codice e il motore sono verificabili; la compatibilità con il telefono e con la specifica chiavetta USB va provata sul dispositivo.
+
+## Nuova interfaccia nella 0.3.0
+
+Tema chiaro predefinito, superfici bianco/celeste, cartelle ambra e comandi blu. Icone vettoriali locali, elenco con separatori e griglia adattabile alla larghezza. Posizioni, preferiti, recenti e cestino restano nella barra inferiore; selezione e appunti hanno una barra contestuale separata con annullamento esplicito. Ordinamento, cambio vista e menu sono accanto all’elenco.
+
+Ridisegnate anche impostazioni, posizioni, permessi, campi di inserimento, finestre e stati vuoti. Tema scuro e dimensioni dei caratteri restano disponibili. La pagina GitHub Pages usa lo stesso stile e mostra schermate reali dell’app con anteprime elenco, griglia e tema scuro.
 
 ## Download e aggiornamenti
 
@@ -10,7 +16,7 @@ All’apertura l’app controlla gli aggiornamenti senza bloccare la navigazione
 
 Internet serve solo per gli aggiornamenti da `https://danielperrella.github.io/Gestore-File/`. I file dell’utente non vengono inviati. `REQUEST_INSTALL_PACKAGES` permette di aprire l’installer dopo la scelta dell’utente; Android richiede conferma.
 
-La 0.2.0 mantiene pacchetto e firma della 0.1.1 originale: installala sopra la precedente senza disinstallare. Resta una versione di prova con la chiave originale di sviluppo, conservata solo localmente e mai pubblicata.
+La 0.3.0 mantiene pacchetto e firma della 0.1.1 originale: installala sopra la precedente senza disinstallare. Resta una versione di prova con la chiave originale di sviluppo, conservata solo localmente e mai pubblicata.
 
 ## Modifiche nella versione 0.1.1
 

@@ -1,8 +1,8 @@
 {
-  "versionCode": 3,
-  "versionName": "0.2.0",
+  "versionCode": 4,
+  "versionName": "0.3.0",
   "apkUrl": "https://danielperrella.github.io/Gestore-File/gestorefile.apk",
-  "size": 169830,
-  "sha256": "47f1980e498854c17ec9417b2a87ddfdbfb9546ec1df08c9418b5ab32dc43b10",
-  "notes": "Distribuzione pubblica e aggiornamenti verificati all’apertura."
+  "size": 183406,
+  "sha256": "a6aa098beb698bfc9a56c0e8dd403e25d32e11cf24b1d4b6aa43aa3edb9fc02d",
+  "notes": "Nuova interfaccia chiara e pulita: cartelle ambra, comandi blu, navigazione inferiore, selezione contestuale e finestre ridisegnate."
 }
