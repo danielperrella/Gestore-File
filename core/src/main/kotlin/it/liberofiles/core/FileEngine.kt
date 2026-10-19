@@ -11,17 +11,23 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
 
     fun transfer(source: Node, destination: Node, move: Boolean, conflict: Conflict,
                  cancellation: Cancellation, verifyCopy: Boolean = false,
-                 progress: (Progress) -> Unit = {}): TransferResult {
+                 targetName: String? = null, progress: (Progress) -> Unit = {}): TransferResult {
         cancellation.check()
         val src = stores[source]; val dst = stores[destination]
         val original = src.stat(source)
+        require(original.capabilities.read) { "Download non consentito; per documenti Google usa Esporta" }
+        require(!move || original.capabilities.move) { "Spostamento non consentito" }
+        require(!move || original.capabilities.delete) { "Non puoi rimuovere l’origine dopo il trasferimento" }
+        require(dst.stat(destination).capabilities.create) { "Non puoi creare file in questa cartella" }
         require(dst.stat(destination).directory) { "La destinazione non è una cartella" }
         require(source.store != destination.store || !src.contains(source, destination)) { "Impossibile copiare una cartella dentro sé stessa" }
-        val existing = dst.child(destination, original.name)
+        val requestedName = validName(targetName ?: original.name)
+        val existing = dst.child(destination, requestedName)
         require(existing != source) { "Origine e destinazione coincidono" }
         if (existing != null && conflict == Conflict.SKIP) return TransferResult(null, true)
-        val name = if (conflict == Conflict.KEEP_BOTH) uniqueName(dst, destination, original.name) else original.name
+        val name = if (conflict == Conflict.KEEP_BOTH) uniqueName(dst, destination, requestedName) else requestedName
         if (existing != null && conflict == Conflict.REPLACE) {
+            dst.requireUnambiguous(destination, requestedName)
             require(!original.directory && !dst.stat(existing).directory) { "Per le cartelle usa Conserva entrambi o Salta. La sostituzione completa delle cartelle è disabilitata." }
         }
         if (move && source.store == destination.store && dst.child(destination, name) == null) {
@@ -35,8 +41,9 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
         }
         return staged(destination, name, original.directory, conflict, "${if (move) "move" else "copy"}: ${source.id}") { stage ->
             val manifest = ArrayList<Snapshot>()
-            copyTree(source, stage, "", manifest, move || verifyCopy, cancellation, progress, 0)
-            if (move || verifyCopy) verifyTree(stage, manifest, cancellation, progress)
+            val verify = move || verifyCopy || src.remote || dst.remote
+            copyTree(source, stage, "", manifest, verify, cancellation, progress, 0)
+            if (verify) verifyTree(stage, manifest, cancellation, progress)
             // Check the complete source before committing or deleting anything.
             assertUnchanged(source, manifest, move, cancellation, progress)
             if (move) {
@@ -53,6 +60,8 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
         validName(name)
         store.refresh(destination)
         val old = store.child(destination, name)
+        val oldEntry = old?.let { store.stat(it) }
+        if (old != null && conflict == Conflict.REPLACE) store.requireUnambiguous(destination, name)
         if (old != null && conflict == Conflict.SKIP) return TransferResult(null, true)
         require(old == null || (conflict == Conflict.REPLACE && !directory && !store.stat(old).directory)) { "La destinazione esiste già" }
         val token = UUID.randomUUID().toString()
@@ -71,6 +80,7 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
             store.refresh(destination)
             val current = store.child(destination, name)
             require(current == old) { "La destinazione è cambiata durante la copia; originali conservati" }
+            require(current == null || sameMetadata(oldEntry!!,store.stat(current))) { "Il file destinazione è stato modificato durante la copia; originali conservati" }
             if (old != null) {
                 record = journal.update(record, "phase" to "backup")
                 backup = store.rename(old, backupName)
@@ -105,6 +115,7 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
         require(depth <= 128 && manifest.size < 250000) { "Albero troppo profondo o troppo grande" }
         val store = stores[source]; val dest = stores[target]
         val before = store.stat(source)
+        require(before.capabilities.read) { "${before.name}: usa Esporta per i documenti Google; download non consentito" }
         if (before.directory) {
             manifest.add(Snapshot(relative, before, null))
             for (entry in store.list(source)) {
@@ -180,7 +191,7 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
                     "Origine modificata: conservata. La copia completa è nella destinazione."
                 }
             }
-            stores[node].deleteEmpty(node) // New directory contents prevent deletion.
+            stores[node].deleteVerified(node,entry) // New directory contents prevent deletion.
         }
     }
     fun hash(node: Node, cancellation: Cancellation): ByteArray {
@@ -193,6 +204,7 @@ class FileEngine(val stores: Stores, private val journal: Journal) {
     fun removeTree(node: Node, cancellation: Cancellation, depth: Int = 0) {
         cancellation.check(); require(depth <= 128) { "Albero troppo profondo" }
         val store = stores[node]
+        require(store.stat(node).capabilities.delete) { "Eliminazione non consentita" }
         if (store.stat(node).directory) for (entry in store.list(node)) removeTree(entry.node, cancellation, depth + 1)
         store.deleteEmpty(node)
     }

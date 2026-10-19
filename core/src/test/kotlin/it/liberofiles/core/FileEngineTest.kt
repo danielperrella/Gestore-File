@@ -34,6 +34,48 @@ class FileEngineTest {
         val src = file("test.txt"); val result = engine.transfer(src, b.rootNode, false, Conflict.KEEP_BOTH, Cancellation())
         assertEquals("originale", contents(result.destination!!)); assertTrue(Files.exists(a.path(src))); assertTrue(journal.pending().isEmpty())
     }
+    @Test fun remoteCopiesAlwaysVerifyDestinationEvenWhenOptionIsOff() {
+        val src=file("cloud.txt")
+        val corrupt=object : Storage by b {
+            override val remote = true
+            override fun read(node: Node): java.io.InputStream = java.io.ByteArrayInputStream("corrupted".toByteArray())
+        }
+        val remoteEngine=FileEngine(Stores(mapOf("a" to a,"b" to corrupt)),journal)
+        fails { remoteEngine.transfer(src,b.rootNode,false,Conflict.KEEP_BOTH,Cancellation(),false) }
+        assertEquals("originale",contents(src)); assertTrue(b.list(b.rootNode).isEmpty())
+    }
+    @Test fun deniedDownloadCannotCreateDestinationOrDeleteSource() {
+        val src=file("restricted.txt")
+        val restricted=object : Storage by a {
+            override fun stat(node: Node) = a.stat(node).copy(capabilities=Capabilities(read=false))
+        }
+        fails { FileEngine(Stores(mapOf("a" to restricted,"b" to b)),journal).transfer(src,b.rootNode,true,Conflict.KEEP_BOTH,Cancellation()) }
+        assertTrue(b.list(b.rootNode).isEmpty()); assertEquals("originale",contents(src))
+    }
+    @Test fun deniedRemovalCannotStartCrossStorageMove() {
+        val src=file("shared.txt")
+        val restricted=object : Storage by a {
+            override fun stat(node: Node) = a.stat(node).copy(capabilities=Capabilities(delete=false))
+        }
+        fails { FileEngine(Stores(mapOf("a" to restricted,"b" to b)),journal).transfer(src,b.rootNode,true,Conflict.KEEP_BOTH,Cancellation()) }
+        assertTrue(b.list(b.rootNode).isEmpty()); assertTrue(Files.exists(a.path(src)))
+    }
+    @Test fun explicitDownloadNameDoesNotRenameSource() {
+        val src=file("original.txt")
+        val result=engine.transfer(src,b.rootNode,false,Conflict.KEEP_BOTH,Cancellation(),targetName="chosen.txt")
+        assertEquals("chosen.txt",b.stat(result.destination!!).name)
+        assertTrue(Files.exists(a.path(src))); assertEquals("originale",contents(result.destination))
+    }
+    @Test fun concurrentlyModifiedDestinationIsPreservedDuringReplacement() {
+        val src=file("same.txt"); val destination=b.create(b.rootNode,"same.txt",false)
+        b.writeNew(destination).use { it.stream.write("old".toByteArray()); it.sync() }
+        var changed=false
+        fails { engine.transfer(src,b.rootNode,false,Conflict.REPLACE,Cancellation()) {
+            if(!changed) { changed=true; Files.writeString(b.root.resolve("same.txt"),"changed destination") }
+        } }
+        assertEquals("changed destination",Files.readString(b.root.resolve("same.txt")))
+        assertEquals("originale",contents(src))
+    }
     @Test fun verifiedCrossStorageMove() {
         val src = file("test.txt", "a".repeat(2_000_000))
         val result = engine.transfer(src, b.rootNode, true, Conflict.KEEP_BOTH, Cancellation())

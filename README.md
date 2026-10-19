@@ -2,6 +2,16 @@
 
 Gestore file locale per Android 11 e successivi, progettato per Xiaomi 11T Pro con Android 14. Versione di prova **0.3.0**: il codice e il motore sono verificabili; la compatibilità con il telefono e con la specifica chiavetta USB va provata sul dispositivo.
 
+## Google Drive — candidata 0.4.0-rc1
+
+Il sorgente include l’integrazione diretta con Google Drive: più account nelle Posizioni, navigazione di Il mio Drive, upload riprendibili, copie e spostamenti verificati, rinomina, creazione cartelle, cestino/ripristino ed esportazione esplicita dei documenti Google. Il canale di download e auto-aggiornamento resta alla **0.3.0** finché non sono completati configurazione OAuth, collaudo con account reali e verifica Google.
+
+La configurazione è descritta in [GOOGLE_DRIVE_SETUP.md](GOOGLE_DRIVE_SETUP.md). Per impostazione predefinita il collegamento è disabilitato con un messaggio esplicativo. Dopo la configurazione del client Android, `-PdriveConfigured=true` abilita l’accesso nelle build di test. Nessuna password o client secret entra nel repository o nell’APK. I token rimangono in memoria e i trasferimenti passano direttamente fra dispositivo e Google.
+
+La candidata non richiede l’account Google per usare telefono/USB. Usa un adattatore Drive separato: le regole del provider USB non vengono allargate ai servizi cloud. Google Docs/Sheets/Slides si aprono esternamente o si esportano esplicitamente; non vengono convertiti negli spostamenti. I Drive condivisi aziendali e la sincronizzazione offline sono esclusi. La [privacy](docs/privacy.html) descrive dati locali, cache e scollegamento.
+
+Le build candidate vengono preparate in `candidate/`, senza sostituire APK e manifest pubblici in `docs/`. `scripts/verify-release.mjs --candidate` verifica l’APK candidato; senza argomenti verifica ancora la distribuzione stabile. La firma resta quella originale.
+
 ## Nuova interfaccia nella 0.3.0
 
 Tema chiaro predefinito, superfici bianco/celeste, cartelle ambra e comandi blu. Icone vettoriali locali, elenco con separatori e griglia adattabile alla larghezza. Posizioni, preferiti, recenti e cestino restano nella barra inferiore; selezione e appunti hanno una barra contestuale separata con annullamento esplicito. Ordinamento, cambio vista e menu sono accanto all’elenco.

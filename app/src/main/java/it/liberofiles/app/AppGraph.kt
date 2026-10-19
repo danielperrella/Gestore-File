@@ -41,6 +41,19 @@ class AppGraph(val context: Context) {
     @Volatile var cancellation: Cancellation? = null
     var clipboard: List<Node> = emptyList()
     var clipboardMove = false
+    @Volatile var transferProgress: ((Progress) -> Unit)? = null
+    val drive = DriveAccounts(context,check={ cancellation?.check() },onUpload={ bytes ->
+        transferProgress?.invoke(Progress(state.progress?.file ?: "File",bytes,"Caricamento Google Drive"))
+    })
+    init {
+        val base=File(context.cacheDir,"drive").canonicalFile
+        val expiry=System.currentTimeMillis()-24*60*60*1000L
+        base.listFiles()?.filter { it.isDirectory && it.name.matches(Regex("drive-[A-Za-z0-9_-]+")) }?.forEach { directory ->
+            if(directory.canonicalFile.parentFile == base) directory.listFiles()?.forEach { file ->
+                if(file.isFile && file.canonicalFile.parentFile == directory.canonicalFile && file.lastModified() < expiry) file.delete()
+            }
+        }
+    }
 
     fun stores(): Stores {
         val map = mutableMapOf<String, Storage>(local.key to local)
@@ -51,6 +64,7 @@ class AppGraph(val context: Context) {
             try { val store = DocumentStorage(context.contentResolver, Uri.parse(item.getString("uri")), item.getString("key")); map[store.key] = store }
             catch (_: Exception) { }
         }
+        drive.accounts().forEach { map[it.key] = drive.storage(it.key) }
         return Stores(map)
     }
     fun roots(): List<Pair<String, Node>> {
@@ -63,6 +77,7 @@ class AppGraph(val context: Context) {
                 roots.add(item.optString("name", "USB / cartella autorizzata") to store.rootNode)
             } catch (_: Exception) { }
         }
+        roots.addAll(drive.roots())
         return roots
     }
     fun addTree(uri: Uri, name: String) {

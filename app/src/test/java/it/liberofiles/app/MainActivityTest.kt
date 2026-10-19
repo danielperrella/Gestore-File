@@ -33,7 +33,7 @@ class MainActivityTest {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val values = texts(controller.get().window.decorView)
         assertTrue(values.any { it == "Autorizza memoria interna" })
-        assertTrue(values.any { it.contains("Internet solo per gli aggiornamenti") })
+        assertTrue(values.any { it.contains("L’account Google è facoltativo") })
         controller.pause().stop().destroy()
     }
     @Test fun lightThemeAndLargeFontCanStart() {

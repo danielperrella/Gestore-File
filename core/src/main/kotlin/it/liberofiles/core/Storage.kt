@@ -5,7 +5,10 @@ import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class Node(val store: String, val id: String)
-data class Entry(val node: Node, val name: String, val directory: Boolean, val size: Long?, val modified: Long?, val identity: String? = null)
+data class Capabilities(val read: Boolean = true, val create: Boolean = true, val rename: Boolean = true,
+                        val move: Boolean = true, val delete: Boolean = true, val export: Boolean = false)
+data class Entry(val node: Node, val name: String, val directory: Boolean, val size: Long?, val modified: Long?, val identity: String? = null,
+                 val mimeType: String? = null, val capabilities: Capabilities = Capabilities())
 
 interface DurableOutput : AutoCloseable {
     val stream: OutputStream
@@ -14,10 +17,12 @@ interface DurableOutput : AutoCloseable {
 
 interface Storage {
     val key: String
+    val remote: Boolean get() = false
     fun stat(node: Node): Entry
     fun list(directory: Node): List<Entry>
     fun parent(node: Node): Node?
     fun child(directory: Node, name: String): Node?
+    fun requireUnambiguous(directory: Node, name: String) { }
     fun create(directory: Node, name: String, isDirectory: Boolean): Node
     fun read(node: Node): InputStream
     /** May open only a newly-created staging file, never an existing user file. */
@@ -26,6 +31,7 @@ interface Storage {
     /** Fast same-filesystem move; false means copy-and-verify is required. */
     fun moveAtomic(node: Node, destination: Node, name: String): Node?
     fun deleteEmpty(node: Node)
+    fun deleteVerified(node: Node, expected: Entry) = deleteEmpty(node)
     fun contains(ancestor: Node, node: Node): Boolean
     fun availableBytes(directory: Node): Long? = null
     fun refresh(directory: Node) { }

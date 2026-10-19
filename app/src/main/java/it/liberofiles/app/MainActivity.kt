@@ -25,6 +25,11 @@ import kotlin.math.roundToInt
 class MainActivity : Activity() {
     private val updater by lazy { AppUpdater(this) }
     private var updateBusy = false
+    private var pendingDriveKey: String? = null
+    private var pendingExport: Node? = null
+    private var pendingExportMime: String? = null
+    private var currentCapabilities = Capabilities()
+    private val knownNames = java.util.concurrent.ConcurrentHashMap<Node,String>()
     private val graph get() = (application as FilesApplication).graph
     private var current: Node? = null
     private var entries = emptyList<Entry>()
@@ -68,6 +73,9 @@ class MainActivity : Activity() {
         dark = graph.preferences.getBoolean("dark", false)
         setTheme(if (dark) R.style.AppTheme else R.style.AppThemeLight)
         super.onCreate(savedInstanceState)
+        pendingDriveKey = savedInstanceState?.getString("driveAuthKey")
+        pendingExport = savedInstanceState?.getString("exportStore")?.let { store -> savedInstanceState.getString("exportId")?.let { Node(store,it) } }
+        pendingExportMime = savedInstanceState?.getString("exportMime")
         font = graph.preferences.getFloat("font", 1f)
         hidden = graph.preferences.getBoolean("hidden", false)
         grid = graph.preferences.getBoolean("grid", false)
@@ -163,6 +171,8 @@ class MainActivity : Activity() {
         }
     }
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("driveAuthKey",pendingDriveKey)
+        pendingExport?.let { outState.putString("exportStore",it.store); outState.putString("exportId",it.id); outState.putString("exportMime",pendingExportMime) }
         current?.let { outState.putString("store", it.store); outState.putString("node", it.id) }; super.onSaveInstanceState(outState)
     }
     override fun onNewIntent(intent: Intent) {
@@ -179,6 +189,7 @@ class MainActivity : Activity() {
     private fun navigate(node: Node) {
         if (node.store == "local" && !Environment.isExternalStorageManager()) { current = node; showPermissionScreen(); return }
         waitingForPermission = false
+        currentCapabilities = Capabilities(create = false)
         current = node; selected.clear(); collection?.isEnabled = false; updateCrumbs(); location.text = displayName(node)
         val cached = cache.get(node)
         if (cached != null) { entries = cached; preparePresentation() } else { entries = emptyList(); presented = emptyList(); showEmpty("Caricamento…"); status.text = "Lettura cartella" }
@@ -186,12 +197,17 @@ class MainActivity : Activity() {
         val stores = graph.stores()
         graph.reads.execute {
             try {
-                require(stores[node].stat(node).directory) { "Questa posizione non è una cartella" }
+                val directory = stores[node].stat(node)
+                require(directory.directory) { "Questa posizione non è una cartella" }
                 val storage = stores[node]
                 val result = (if (storage is LocalStorage) storage.browse(node) else storage.list(node)).filter { !it.name.startsWith(".lf-") && it.name != ".LiberoFilesTrash" }
                 graph.main.post { if (!canUseUi()) return@post
 
                     if (generation != loadGeneration || isFinishing) return@post
+                    currentCapabilities = directory.capabilities
+                    knownNames[node] = directory.name
+                    result.forEach { knownNames[it.node] = it.name }
+                    location.text = displayName(node)
                     cache.put(node, result); entries = result; preparePresentation()
                     graph.saveNodes("recent", listOf(node) + graph.nodes("recent"))
                 }
@@ -285,6 +301,28 @@ class MainActivity : Activity() {
 
     private fun updateCrumbs() {
         crumbs.removeAllViews(); val node = current ?: return
+        if(node.store.startsWith("drive-")) {
+            crumbs.visibility = View.GONE
+            graph.reads.execute {
+                try {
+                    val store = graph.stores()[node]; val path = ArrayList<Pair<Node,String>>(); var cursor: Node? = node
+                    val seen = HashSet<Node>()
+                    while(cursor != null && path.size < 128 && seen.add(cursor)) {
+                        val part = cursor; val entry = store.stat(part); knownNames[part] = entry.name
+                        path.add(part to displayName(part)); cursor = store.parent(part)
+                    }
+                    graph.main.post {
+                        if(!canUseUi() || current != node) return@post
+                        crumbs.removeAllViews(); crumbs.visibility = if(path.size <= 1) View.GONE else View.VISIBLE
+                        path.asReversed().forEachIndexed { index,(part,name) ->
+                            if(index > 0) crumbs.addView(label("›",12f,muted))
+                            crumbs.addView(button(name) { navigate(part) })
+                        }
+                    }
+                } catch (_: Exception) { /* Listing displays actionable network/auth errors. */ }
+            }
+            return
+        }
         val path = ArrayList<Node>(); var cursor: Node? = node
         try { val stores = graph.stores(); while (cursor != null && path.size < 128) { path.add(cursor); cursor = stores[cursor].parent(cursor) } }
         catch (_: Exception) { path.add(node) }
@@ -298,9 +336,18 @@ class MainActivity : Activity() {
         }
     }
     private fun displayName(node: Node): String = graph.roots().firstOrNull { it.second == node }?.first
+        ?: knownNames[node]
         ?: node.id.substringAfterLast('/').substringAfter(':').ifBlank { "Memoria" }
     private fun up(): Boolean {
         val node = current ?: return false
+        if(node.store.startsWith("drive-")) {
+            if(node.id == "root") return false
+            graph.reads.execute {
+                try { val parent = graph.stores()[node].parent(node); graph.main.post { if(canUseUi() && current == node && parent != null) navigate(parent) } }
+                catch (e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Cartella superiore non disponibile") } }
+            }
+            return true
+        }
         val parent = try { graph.stores()[node].parent(node) } catch (_: Exception) { null }
         return if (parent != null) { navigate(parent); true } else false
     }
@@ -320,7 +367,7 @@ class MainActivity : Activity() {
         nav("home", "Posizioni") { locations() }
         nav("star", "Preferiti") { savedLocations("favorites", "Preferiti") }
         nav("clock", "Recenti") { savedLocations("recent", "Cartelle recenti") }
-        nav("trash", "Cestino") { trashDialog() }
+        nav("trash", "Cestino") { current?.takeIf { it.store.startsWith("drive-") }?.let { driveTrash(it.store) } ?: trashDialog() }
         if (selectionBar.visibility != View.VISIBLE) return
         val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         heading.addView(label(if (selected.isNotEmpty()) "${selected.size} selezionati" else "${graph.clipboard.size} elementi da incollare", 14f, accent, true), LinearLayout.LayoutParams(0,-2,1f))
@@ -331,16 +378,21 @@ class MainActivity : Activity() {
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(actions) }
         selectionBar.addView(scroll)
-        fun add(kind: String, text: String, action: () -> Unit) {
+        fun add(kind: String, text: String, enabled: Boolean = true, action: () -> Unit) {
             actions.addView(button(text, action = action).apply {
+                isEnabled = enabled; alpha = if(enabled) 1f else .4f
                 setCompoundDrawablesWithIntrinsicBounds(UiIcon(kind, accent, dp(19)),null,null,null)
                 compoundDrawablePadding = dp(7)
             })
         }
         if (selected.isNotEmpty()) {
-            add("copy", "Copia") { clipboard(false) }; add("move", "Sposta") { clipboard(true) }; add("trash", "Elimina") { deleteSelected() }; add("more", "Altro") { selectionMenu() }
+            val rows=entries.filter { it.node in selected }
+            add("copy", "Copia",rows.all { it.capabilities.read }) { clipboard(false) }
+            add("move", "Sposta",rows.all { it.capabilities.move }) { clipboard(true) }
+            add("trash", "Elimina",rows.all { it.capabilities.delete }) { deleteSelected() }
+            add("more", "Altro") { selectionMenu() }
         } else {
-            add("paste", "Incolla qui") { paste() }
+            add("paste", "Incolla qui",currentCapabilities.create) { paste() }
             actions.addView(label("Scegli la cartella di destinazione", 12f, muted))
         }
     }
@@ -353,7 +405,7 @@ class MainActivity : Activity() {
             2 -> { hidden = !hidden; graph.preferences.edit().putBoolean("hidden", hidden).apply(); preparePresentation() }
             3 -> current?.let { graph.saveNodes("favorites", graph.nodes("favorites") + it); toast("Cartella aggiunta ai preferiti") }
             4 -> analyzeCurrent()
-            5 -> trashDialog()
+            5 -> current?.takeIf { it.store.startsWith("drive-") }?.let { driveTrash(it.store) } ?: trashDialog()
             6 -> shortcut()
             7 -> settings()
         } }.show()
@@ -366,15 +418,17 @@ class MainActivity : Activity() {
         }.show()
     }
     private fun locations() {
-        val roots = graph.roots(); val labels = roots.map { it.first } + listOf("Aggiungi USB / cartella", "Preferiti", "Recenti", "Cestino", "Rimuovi una memoria autorizzata")
-        val subtitles = roots.map { if (it.second.store == "local") "Cartelle e file sul dispositivo" else "Memoria autorizzata" } + listOf("Collega una memoria dal selettore Android", "Le cartelle che hai salvato", "Riprendi dalle ultime cartelle aperte", "Recupera i file della memoria interna", "Revoca l’accesso senza eliminare file")
-        val icons = roots.map { if (it.second.store == "local") "home" else "usb" } + listOf("plus", "star", "clock", "trash", "close")
+        val roots = graph.roots(); val labels = roots.map { it.first } + listOf("Aggiungi USB / cartella", "Aggiungi Google Drive", "Account Google Drive", "Preferiti", "Recenti", "Cestino locale", "Rimuovi una memoria autorizzata")
+        val subtitles = roots.map { when { it.second.store == "local" -> "Cartelle e file sul dispositivo"; it.second.store.startsWith("drive-") -> "Il mio Drive · Richiede connessione"; else -> "Memoria autorizzata" } } + listOf("Collega una memoria dal selettore Android", "Collega un account Google", "Ricollega, cestino e scollegamento", "Le cartelle che hai salvato", "Riprendi dalle ultime cartelle aperte", "Recupera i file della memoria interna", "Revoca l’accesso senza eliminare file")
+        val icons = roots.map { when { it.second.store == "local" -> "home"; it.second.store.startsWith("drive-") -> "cloud"; else -> "usb" } } + listOf("plus", "cloud", "settings", "star", "clock", "trash", "close")
         optionDialog("Le tue posizioni", labels, subtitles, icons) { which -> when {
             which < roots.size -> navigate(roots[which].second)
             which == roots.size -> selectTree()
-            which == roots.size + 1 -> savedLocations("favorites", "Preferiti")
-            which == roots.size + 2 -> savedLocations("recent", "Cartelle recenti")
-            which == roots.size + 3 -> trashDialog()
+            which == roots.size + 1 -> connectDrive()
+            which == roots.size + 2 -> driveAccountDialog()
+            which == roots.size + 3 -> savedLocations("favorites", "Preferiti")
+            which == roots.size + 4 -> savedLocations("recent", "Cartelle recenti")
+            which == roots.size + 5 -> trashDialog()
             else -> removeTreeDialog()
         } }
     }
@@ -388,7 +442,7 @@ class MainActivity : Activity() {
         dialog.setNegativeButton("Chiudi", null).show()
     }
     private fun removeTreeDialog() {
-        val roots = graph.roots().filter { it.second.store != "local" }
+        val roots = graph.roots().filter { it.second.store != "local" && !it.second.store.startsWith("drive-") }
         if (roots.isEmpty()) { toast("Nessuna memoria aggiunta"); return }
         AlertDialog.Builder(this).setTitle("Revoca accesso").setItems(roots.map { it.first }.toTypedArray()) { _, i ->
             confirm("Rimuovere ${roots[i].first}?", "I file restano nella memoria. Verrà revocato l'accesso dell'app.") {
@@ -405,7 +459,7 @@ class MainActivity : Activity() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(28), dp(28), dp(28), dp(28)) }
         content.addView(ImageView(this).apply { setImageDrawable(UiIcon("folder",folderColor,dp(60))); setPadding(dp(16),dp(16),dp(16),dp(16)); background = shape(softBlue) }, LinearLayout.LayoutParams(dp(88),dp(88)).apply { bottomMargin = dp(24) })
         content.addView(label("Tutto comincia\ndai tuoi file.", 32f, bold = true))
-        content.addView(label("Per gestire la memoria interna autorizza l'accesso ai file nelle impostazioni Android. Per USB puoi scegliere una cartella dal selettore di sistema.\n\nNessun account. Internet solo per gli aggiornamenti; i tuoi file restano sul dispositivo.", 15f, muted).apply { setPadding(0, dp(20), 0, dp(20)) })
+        content.addView(label("Per gestire la memoria interna autorizza l'accesso ai file nelle impostazioni Android. Per USB puoi scegliere una cartella dal selettore di sistema.\n\nI file locali restano sul dispositivo. Internet serve per gli aggiornamenti e, solo se colleghi Google Drive, per i trasferimenti con Google. L’account Google è facoltativo.", 15f, muted).apply { setPadding(0, dp(20), 0, dp(20)) })
         content.addView(button("Autorizza memoria interna") {
             try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))) }
             catch (_: ActivityNotFoundException) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
@@ -422,6 +476,17 @@ class MainActivity : Activity() {
     @Deprecated("Platform activity result for dependency-free Android app")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if(requestCode == 44) {
+            if(resultCode != RESULT_OK) { toast("Collegamento Google annullato"); pendingDriveKey = null; return }
+            try { finishDriveAuthorization(graph.drive.result(data)) } catch (_: Exception) { error("Autorizzazione Google non completata. Riprova da Posizioni.") }
+            return
+        }
+        if(requestCode == 45) {
+            val node = pendingExport; val mime = pendingExportMime
+            pendingExport = null; pendingExportMime = null
+            if(resultCode == RESULT_OK && data?.data != null && node != null && mime != null) exportDriveTo(node,mime,data.data!!)
+            return
+        }
         if (requestCode != 42 || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
@@ -436,8 +501,171 @@ class MainActivity : Activity() {
         } catch (e: Exception) { error(e.message ?: "Autorizzazione non riuscita") }
     }
 
+    private fun connectDrive(key: String? = null) {
+        if(!BuildConfig.DRIVE_CONFIGURED) {
+            AlertDialog.Builder(this).setTitle("Google Drive · Versione candidata")
+                .setMessage("Questa build candidata richiede la configurazione del client OAuth Android nel progetto Google Cloud. Google Drive sarà abilitato nelle build di test dopo la configurazione; la disponibilità pubblica seguirà le verifiche Google.")
+                .setPositiveButton("Chiudi",null).show()
+            return
+        }
+        if(!graph.drive.available()) { error("Google Play Services non disponibile. Le memorie locali restano utilizzabili."); return }
+        if(graph.running.get() || graph.pending.isNotEmpty()) { toast("Attendi la fine dei trasferimenti prima di cambiare account"); return }
+        pendingDriveKey = key
+        graph.drive.authorize(this,key?.let { graph.drive.account(it) }, { result ->
+            if(!canUseUi()) return@authorize
+            if(result.hasResolution()) {
+                try { startIntentSenderForResult(result.pendingIntent!!.intentSender,44,null,0,0,0) }
+                catch (_: Exception) { error("Impossibile aprire l’autorizzazione Google") }
+            } else finishDriveAuthorization(result)
+        }, { if(canUseUi()) error("Collegamento Google non riuscito. Verifica rete e configurazione OAuth, poi riprova.") })
+    }
+    private fun finishDriveAuthorization(result: com.google.android.gms.auth.api.identity.AuthorizationResult) {
+        val expected = pendingDriveKey; pendingDriveKey = null
+        graph.reads.execute {
+            try {
+                val account = graph.drive.connect(result,expected)
+                graph.main.post { if(canUseUi()) { cache.evictAll(); navigate(Node(account.key,"root")) } }
+            } catch (e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Collegamento Google non completato") } }
+        }
+    }
+    private fun driveAccountDialog() {
+        val accounts = graph.drive.accounts()
+        if(accounts.isEmpty()) { connectDrive(); return }
+        AlertDialog.Builder(this).setTitle("Account Google Drive").setItems(accounts.map { it.email }.toTypedArray()) { _,i ->
+            val account = accounts[i]
+            AlertDialog.Builder(this).setTitle(account.email).setItems(arrayOf("Apri Il mio Drive","Ricollega account","Cestino Google Drive","Scollega account…")) { _,action -> when(action) {
+                0 -> navigate(Node(account.key,"root"))
+                1 -> connectDrive(account.key)
+                2 -> driveTrash(account.key)
+                3 -> confirm("Scollegare ${account.email}?","Revoca l’accesso a Google Drive e rimuove cache e preferiti dell’account da questo dispositivo. I file online restano intatti.") {
+                    if(graph.running.get() || graph.pending.isNotEmpty()) { toast("Attendi la fine delle operazioni"); return@confirm }
+                    graph.reads.execute {
+                        try {
+                            graph.drive.disconnect(account.key)
+                            for(name in listOf("favorites","recent")) graph.saveNodes(name,graph.nodes(name).filterNot { it.store == account.key })
+                            graph.main.post { if(canUseUi()) {
+                                graph.clipboard = graph.clipboard.filterNot { it.store == account.key }
+                                knownNames.keys.removeAll { it.store == account.key }; cache.evictAll(); navigate(graph.local.rootNode)
+                            } }
+                        } catch (_: Exception) { graph.main.post { if(canUseUi()) error("Scollegamento non completato. Verifica la rete e riprova; puoi revocare l’accesso anche dalle impostazioni dell’account Google.") } }
+                    }
+                }
+            } }.setNegativeButton("Chiudi",null).show()
+        }.setNegativeButton("Chiudi",null).setPositiveButton("Aggiungi account") { _,_ -> connectDrive() }.show()
+    }
+    private fun driveTrash(key: String) {
+        graph.reads.execute {
+            try {
+                val store = graph.drive.storage(key); val items = store.trashed()
+                graph.main.post { if(!canUseUi()) return@post
+                    if(items.isEmpty()) { toast("Il cestino Google Drive è vuoto"); return@post }
+                    AlertDialog.Builder(this).setTitle("Cestino · ${graph.drive.account(key).email}")
+                        .setItems(items.map { it.name }.toTypedArray()) { _,i ->
+                            confirm("Ripristinare ${items[i].name}?","Il file tornerà nella posizione consentita da Google Drive.") {
+                                operation("Ripristino Google Drive") { _,_ -> store.restore(items[i].node); Outcome("Elemento ripristinato su Drive") }
+                            }
+                        }.setNegativeButton("Chiudi",null).show()
+                }
+            } catch(e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Cestino Drive non disponibile") } }
+        }
+    }
+    private fun driveFile(node: Node): Pair<java.io.File,String> {
+        val store = graph.drive.storage(node.store); val before = store.metadata(node); val entry = store.entry(before)
+        require(entry.capabilities.read && !entry.directory) { "File Drive non scaricabile" }
+        val directory = java.io.File(cacheDir,"drive/${node.store}").apply { require(isDirectory || mkdirs()) }
+        val extension = entry.name.substringAfterLast('.',"bin").takeIf { it.matches(Regex("[A-Za-z0-9]{1,12}")) } ?: "bin"
+        val file = java.io.File.createTempFile("download-",".$extension",directory)
+        try {
+            val hash = java.security.MessageDigest.getInstance("SHA-256")
+            var bytes = 0L
+            store.read(node).use { input -> file.outputStream().use { output ->
+                val buffer=ByteArray(65536)
+                while(true) { val count=input.read(buffer); if(count<0) break; output.write(buffer,0,count); hash.update(buffer,0,count); bytes+=count }
+            } }
+            require(entry.size == null || bytes == entry.size) { "Download Drive incompleto" }
+            val digest=hash.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+            val expected=before.optString("sha256Checksum")
+            require(expected.isEmpty() || digest == expected) { "Integrità del download Drive non confermata" }
+            require(before.optString("version") == store.metadata(node).optString("version")) { "Il file Drive è cambiato durante il download" }
+            return file to (entry.mimeType ?: "application/octet-stream")
+        } catch(e: Exception) { file.delete(); throw e }
+    }
+    private fun openDrive(node: Node, external: Boolean = false) {
+        toast("Apertura da Google Drive…")
+        graph.reads.execute {
+            try {
+                val store = graph.drive.storage(node.store); val data = store.metadata(node)
+                val mime=data.getString("mimeType")
+                val browser = external || mime.startsWith("application/vnd.google-apps.")
+                val intent = if(browser) {
+                    val uri=Uri.parse(data.optString("webViewLink","https://drive.google.com/file/d/${Uri.encode(node.id)}/view"))
+                    require(uri.scheme == "https" && uri.host in listOf("drive.google.com","docs.google.com")) { "Link Google non valido" }
+                    Intent(Intent.ACTION_VIEW,uri)
+                } else {
+                    val (file,type)=driveFile(node); val uri=ShareProvider.cachedUri(this,node.store,file,displayName(node),type)
+                    Intent(Intent.ACTION_VIEW).setDataAndType(uri,type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData=ClipData.newRawUri("File Drive",uri) }
+                }
+                graph.main.post { if(canUseUi()) try { startActivity(Intent.createChooser(intent,"Apri con")) } catch (_: Exception) { error("Nessuna app disponibile per questo file") } }
+            } catch(e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Apertura Drive non riuscita") } }
+        }
+    }
+    private fun prepareDriveShare(nodes: List<Node>) {
+        toast("Preparazione dei file da condividere…")
+        graph.reads.execute {
+            try {
+                val uris=ArrayList<Uri>()
+                for(node in nodes) {
+                    if(node.store.startsWith("drive-")) { val (file,type)=driveFile(node); uris.add(ShareProvider.cachedUri(this,node.store,file,displayName(node),type)) }
+                    else uris.add(ShareProvider.uri(this,node))
+                }
+                val intent=Intent(if(uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
+                    type="*/*"
+                    if(uris.size == 1) putExtra(Intent.EXTRA_STREAM,uris.first()) else putParcelableArrayListExtra(Intent.EXTRA_STREAM,uris)
+                    clipData=ClipData.newRawUri("File",uris.first()).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                graph.main.post { if(canUseUi()) startActivity(Intent.createChooser(intent,"Condividi file")) }
+            } catch(e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Condivisione non riuscita") } }
+        }
+    }
+    private fun exportDrive(node: Node) {
+        val type=entries.firstOrNull { it.node == node }?.mimeType
+        val office=when(type) {
+            "application/vnd.google-apps.document" -> "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "application/vnd.google-apps.spreadsheet" -> "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "application/vnd.google-apps.presentation" -> "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            else -> { error("Esportazione non disponibile per questo tipo di documento"); return }
+        }
+        AlertDialog.Builder(this).setTitle("Esporta documento Google").setItems(arrayOf("PDF",office.first.uppercase())) { _,i ->
+            val format=if(i == 0) "pdf" to "application/pdf" else office
+            pendingExport=node; pendingExportMime=format.second
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType(format.second).addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(Intent.EXTRA_TITLE,displayName(node)+"."+format.first),45)
+        }.setNegativeButton("Annulla",null).show()
+    }
+    private fun exportDriveTo(node: Node, mime: String, target: Uri) {
+        operation("Esportazione Google Drive") { cancel,progress ->
+            val store=graph.drive.storage(node.store); val before=store.metadata(node)
+            require(before.optJSONObject("capabilities")?.optBoolean("canDownload") == true) { "Esportazione non consentita dal proprietario" }
+            val directory=java.io.File(cacheDir,"drive/${node.store}").apply { mkdirs() }
+            val file=java.io.File.createTempFile("export-",".part",directory)
+            try {
+                store.api.export(node.id,mime).use { input -> file.outputStream().use { output ->
+                    val bytes=ByteArray(65536); var total=0L
+                    while(true) { cancel.check(); val count=input.read(bytes); if(count<0) break; output.write(bytes,0,count); total+=count; progress(Progress(displayName(node),total,"Esportazione")) }
+                } }
+                require(before.optString("version") == store.metadata(node).optString("version")) { "Documento cambiato durante l’esportazione" }
+                file.inputStream().use { input -> (contentResolver.openOutputStream(target,"wt") ?: throw java.io.IOException("Destinazione non disponibile")).use { output ->
+                    val bytes=ByteArray(65536)
+                    while(true) { cancel.check(); val count=input.read(bytes); if(count<0) break; output.write(bytes,0,count) }
+                } }
+                Outcome("Documento esportato; originale Google conservato")
+            } finally { file.delete() }
+        }
+    }
     private fun newFolder() {
         val parent = current ?: return
+        if(!currentCapabilities.create && !waitingForPermission) { error("Questa cartella è in sola lettura"); return }
         prompt("Nuova cartella", "Nuova cartella") { name ->
             val stores = graph.stores()
             operation("Crea cartella") { cancel, _ -> cancel.check(); stores[parent].create(parent, validName(name), true); Outcome("Cartella creata") }
@@ -456,14 +684,49 @@ class MainActivity : Activity() {
             .setNegativeButton("Sostituisci…") { _, _ -> confirm("Sostituire i file esistenti?", "La sostituzione riguarda i file, non le cartelle. La versione precedente sarà rimossa solo dopo la copia riuscita.") { transfer(sources, destination, move, Conflict.REPLACE) } }
             .show()
     }
-    private fun transfer(sources: List<Node>, destination: Node, move: Boolean, conflict: Conflict) {
+    private fun transfer(sources: List<Node>, destination: Node, move: Boolean, conflict: Conflict,
+                         names: Map<Node,String> = emptyMap(), replacements: Map<String,String> = emptyMap()) {
+        val invalid = sources.firstOrNull { source -> !destination.store.startsWith("drive-") && source !in names && knownNames[source]?.let { try { validName(it); false } catch (_: Exception) { true } } == true }
+        if(invalid != null) {
+            prompt("Nome per la copia di ${displayName(invalid)}","File scaricato") { name -> transfer(sources,destination,move,conflict,names + (invalid to name),replacements) }
+            return
+        }
+        if(conflict == Conflict.REPLACE && destination.store.startsWith("drive-")) {
+            graph.reads.execute {
+                try {
+                    val store=graph.drive.storage(destination.store)
+                    val ambiguous=sources.map { source -> names[source] ?: graph.stores()[source].stat(source).name }.distinct()
+                        .firstOrNull { it !in replacements && store.matches(destination,it).size > 1 }
+                    if(ambiguous != null) {
+                        val choices=store.matches(destination,ambiguous).filterNot { it.directory }
+                        graph.main.post { if(canUseUi()) {
+                            if(choices.isEmpty()) { error("La sostituzione di cartelle è disabilitata"); return@post }
+                            AlertDialog.Builder(this).setTitle("Quale file '$ambiguous' sostituire?")
+                                .setItems(choices.map { "${it.name}\n${formatBytes(it.size)} · ${it.modified?.let { time -> dateFormatter.format(Date(time)) } ?: "Data non disponibile"}\nID: ${it.node.id}" }.toTypedArray()) { _,index -> transfer(sources,destination,move,conflict,names,replacements+(ambiguous to choices[index].node.id)) }
+                                .setNegativeButton("Annulla",null).show()
+                        } }
+                    } else graph.main.post { if(canUseUi()) performTransfer(sources,destination,move,conflict,names,replacements) }
+                } catch(e: Exception) { graph.main.post { if(canUseUi()) error(e.message ?: "Destinazione Drive non disponibile") } }
+            }
+            return
+        }
+        performTransfer(sources,destination,move,conflict,names,replacements)
+    }
+    private fun performTransfer(sources: List<Node>, destination: Node, move: Boolean, conflict: Conflict,
+                                names: Map<Node,String>, replacements: Map<String,String>) {
         val engine = graph.engine(); val verify = graph.preferences.getBoolean("verifyCopy", false)
         graph.clipboard = emptyList(); updateActions()
         operation(if (move) "Spostamento" else "Copia") { cancel, progress ->
+            val destinationStore=engine.stores[destination]
+            if(destinationStore is DriveStorage) replacements.forEach { (name,id) -> destinationStore.selectReplacement(destination,name,id) }
             var completed = 0; var skipped = 0
             for (source in sources) {
                 cancel.check()
-                val result = engine.transfer(source, destination, move, conflict, cancel, verify, progress)
+                val store = engine.stores[source]
+                val result = if(move && source.store == destination.store && store is DriveStorage && conflict != Conflict.REPLACE) {
+                    val record = graph.journal.begin(mapOf("operation" to "drive-move","store" to source.store,"source" to source.id,"destination" to destination.id,"phase" to "moving"))
+                    val moved = store.move(source,destination,conflict); graph.journal.finish(record); moved
+                } else engine.transfer(source, destination, move, conflict, cancel, verify, names[source], progress)
                 if (result.skipped) skipped++ else completed++
             }
             Outcome("$completed elementi completati${if (skipped > 0) ", $skipped saltati" else ""}")
@@ -473,28 +736,37 @@ class MainActivity : Activity() {
         val sources = selected.toList(); if (sources.isEmpty()) return
         val localOnly = sources.all { it.store == "local" }
         val message = if (localOnly) "Gli elementi andranno nel cestino locale e potranno essere ripristinati."
-            else "Su USB l'eliminazione è DEFINITIVA. Gli elementi nella memoria interna andranno nel cestino."
+            else "Google Drive: spostamento nel cestino dell’account. Memoria interna: cestino locale. USB: eliminazione DEFINITIVA."
         confirm("Elimina ${sources.size} elementi?", message) {
             val engine = graph.engine(); val trash = Trash(graph.local)
             operation("Eliminazione") { cancel, progress ->
-                for (node in sources) { cancel.check(); progress(Progress(displayName(node), phase = "Eliminazione")); if (node.store == "local") trash.put(node) else engine.removeTree(node, cancel) }
+                for (node in sources) {
+                    cancel.check(); progress(Progress(displayName(node), phase = "Eliminazione"))
+                    val store = engine.stores[node]
+                    if (node.store == "local") trash.put(node) else if(store is DriveStorage) store.trash(node) else engine.removeTree(node, cancel)
+                }
                 Outcome(if (localOnly) "Elementi spostati nel cestino" else "Eliminazione completata")
             }
         }
     }
     private fun selectionMenu() {
         val nodes = selected.toList(); if (nodes.isEmpty()) return
-        val options = mutableListOf("Rinomina", "Rinomina multipla", "Crea ZIP", "Condividi", "Dettagli", "Deseleziona")
-        if (nodes.size == 1 && entries.firstOrNull { it.node == nodes.first() }?.name?.endsWith(".zip", true) == true) options.add("Estrai ZIP qui")
-        AlertDialog.Builder(this).setTitle("${nodes.size} selezionati").setItems(options.toTypedArray()) { _, i -> when (i) {
-            0 -> if (nodes.size == 1) renameOne(nodes.first()) else toast("Per più file usa Rinomina multipla")
-            1 -> renameMany(nodes)
-            2 -> createZip(nodes)
-            3 -> share(nodes)
-            4 -> details(nodes)
-            5 -> { selected.clear(); refreshSelection() }
-            6 -> extractZip(nodes.first())
-        } }.show()
+        val rows = entries.filter { it.node in nodes }
+        val options = mutableListOf<Pair<String,()->Unit>>()
+        if(rows.all { it.capabilities.rename }) {
+            options.add("Rinomina" to { if(nodes.size == 1) renameOne(nodes.first()) else toast("Per più file usa Rinomina multipla") })
+            options.add("Rinomina multipla" to { renameMany(nodes) })
+        }
+        if(rows.all { it.capabilities.read }) {
+            options.add("Crea ZIP" to { createZip(nodes) }); options.add("Condividi" to { share(nodes) })
+        }
+        if(nodes.size == 1 && nodes.first().store.startsWith("drive-")) {
+            options.add("Apri in Google Drive" to { openDrive(nodes.first(),true) })
+            if(rows.firstOrNull()?.capabilities?.export == true && rows.firstOrNull()?.mimeType in listOf("application/vnd.google-apps.document","application/vnd.google-apps.spreadsheet","application/vnd.google-apps.presentation")) options.add("Esporta…" to { exportDrive(nodes.first()) })
+        }
+        options.add("Dettagli" to { details(nodes) }); options.add("Deseleziona" to { selected.clear(); refreshSelection() })
+        if(nodes.size == 1 && rows.firstOrNull()?.name?.endsWith(".zip",true) == true) options.add("Estrai ZIP qui" to { extractZip(nodes.first()) })
+        AlertDialog.Builder(this).setTitle("${nodes.size} selezionati").setItems(options.map { it.first }.toTypedArray()) { _,i -> options[i].second() }.show()
     }
     private fun renameOne(node: Node) {
         val name = entries.firstOrNull { it.node == node }?.name ?: displayName(node)
@@ -532,6 +804,7 @@ class MainActivity : Activity() {
         operation("Estrazione ZIP") { cancel, progress -> tools.unzip(node, destination, cancel, progress); Outcome("ZIP estratto in una nuova cartella") }
     }
     private fun open(node: Node, name: String) {
+        if(node.store.startsWith("drive-")) { openDrive(node); return }
         try {
             val uri = ShareProvider.uri(this, node)
             val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, ShareProvider.mime(name)).apply {
@@ -541,6 +814,7 @@ class MainActivity : Activity() {
         } catch (e: Exception) { error(if (e is ActivityNotFoundException) "Nessuna app disponibile per questo formato" else e.message ?: "Apertura non riuscita") }
     }
     private fun share(nodes: List<Node>) {
+        if(nodes.any { it.store.startsWith("drive-") }) { prepareDriveShare(nodes); return }
         val details = entries.filter { it.node in nodes }
         if (details.any { it.directory }) { error("Per condividere cartelle crea prima uno ZIP"); return }
         try {
@@ -661,13 +935,13 @@ class MainActivity : Activity() {
 
     private fun settings() {
         val labels = arrayOf(if (dark) "Tema chiaro" else "Tema scuro", "Dimensione caratteri", "Verifica completa anche nelle copie: ${if (graph.preferences.getBoolean("verifyCopy", false)) "sì" else "no"}", "Privacy e sicurezza", "Operazioni interrotte", "Controlla aggiornamenti")
-        optionDialog("Impostazioni", labels.toList(), listOf("Scegli l’aspetto dell’app", "Adatta la leggibilità", "Controllo SHA-256 aggiuntivo sulle copie", "Permessi, aggiornamenti e protezione dei file", "Verifica copie parziali e residui", "Versione 0.3.0 · Scarica nuove versioni"), listOf("settings", "file", "check", "home", "clock", "move")) { i -> when (i) {
+        optionDialog("Impostazioni", labels.toList(), listOf("Scegli l’aspetto dell’app", "Adatta la leggibilità", "Controllo SHA-256 aggiuntivo sulle copie", "Permessi, aggiornamenti e protezione dei file", "Verifica copie parziali e residui", "Versione ${BuildConfig.VERSION_NAME} · Scarica nuove versioni"), listOf("settings", "file", "check", "home", "clock", "move")) { i -> when (i) {
             0 -> { graph.preferences.edit().putBoolean("dark", !dark).apply(); recreate() }
             1 -> AlertDialog.Builder(this).setTitle("Caratteri").setItems(arrayOf("Compatto", "Normale", "Grande", "Molto grande")) { _, index ->
                 graph.preferences.edit().putFloat("font", floatArrayOf(.9f, 1f, 1.15f, 1.3f)[index]).apply(); recreate()
             }.show()
             2 -> { val old = graph.preferences.getBoolean("verifyCopy", false); graph.preferences.edit().putBoolean("verifyCopy", !old).apply(); toast(if (old) "Copie: controllo dimensione" else "Copie: verifica SHA-256 completa") }
-            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Internet usato solo per controllare e scaricare aggiornamenti da GitHub Pages. Nessuna pubblicità, account o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino solo locale, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione 0.3.0 (prova)").setPositiveButton("Chiudi", null).show()
+            3 -> AlertDialog.Builder(this).setTitle("Privacy e sicurezza").setMessage("Internet usato per gli aggiornamenti e per Google Drive, solo se colleghi un account. Trasferimenti diretti fra telefono e Google; nessun server applicativo, pubblicità o tracciamento.\n\nSpostamenti tra memorie: verifica SHA-256 prima di rimuovere gli originali.\n\nCestino locale e cestino Google Drive separati, nessuno svuotamento automatico.\n\nEvita di modificare gli stessi file con altre app durante le operazioni. Nessun software protegge dai guasti fisici del supporto.\n\nVersione ${BuildConfig.VERSION_NAME} (prova)").setPositiveButton("Chiudi", null).show()
             5 -> checkUpdates(true)
             4 -> graph.reads.execute { val records = graph.journal.pending(); graph.main.post { if (!canUseUi()) return@post
  recoveryDialog(records) } }

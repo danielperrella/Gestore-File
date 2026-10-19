@@ -24,10 +24,12 @@ android {
         applicationId = "it.liberofiles.app"
         minSdk = 30
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.4.0-rc1"
+        buildConfigField("boolean", "DRIVE_CONFIGURED", providers.gradleProperty("driveConfigured").orElse("false").get())
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    buildFeatures { buildConfig = true }
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
@@ -44,6 +46,8 @@ android {
 kotlin { jvmToolchain(17) }
 dependencies {
     implementation(project(":core"))
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
 }

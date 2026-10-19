@@ -24,6 +24,7 @@ class UiIcon(private val kind: String, private val tint: Int, private val size: 
         }
         fun rect(l: Float, t: Float, r: Float, b: Float, radius: Float = 2f) = canvas.drawRoundRect(l,t,r,b,radius,radius,paint)
         when(kind) {
+            "cloud" -> { val p=Path().apply { moveTo(6f,19f); cubicTo(0f,19f,0f,10f,6f,10f); cubicTo(7f,2f,18f,2f,19f,11f); cubicTo(25f,11f,24f,19f,19f,19f); close() }; canvas.drawPath(p,paint) }
             "folder" -> { val p=Path().apply { moveTo(3f,6f); quadTo(3f,4f,5f,4f); lineTo(10f,4f); lineTo(12f,7f); lineTo(19f,7f); quadTo(21f,7f,21f,9f); lineTo(21f,18f); quadTo(21f,20f,19f,20f); lineTo(5f,20f); quadTo(3f,20f,3f,18f); close() }; paint.style=Paint.Style.FILL; canvas.drawPath(p,paint); paint.color=Color.argb(70,255,255,255); canvas.drawRect(3f,9f,21f,11f,paint) }
             "file", "pdf", "zip", "image", "music" -> { line(14f,3f,5f,3f,5f,21f,19f,21f,19f,8f,14f,3f,14f,8f,19f,8f); when(kind) {
                 "image" -> { canvas.drawCircle(9f,12f,1f,paint); line(7f,18f,11f,14f,14f,17f,16f,15f) }

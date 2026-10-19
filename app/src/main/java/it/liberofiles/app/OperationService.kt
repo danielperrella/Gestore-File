@@ -46,6 +46,7 @@ class OperationService : Service() {
                             }
                         }
                         try {
+                            graph.transferProgress = progress
                             val outcome = work.execute(cancel, progress)
                             graph.publish(JobState(false, work.title, message = outcome.message, report = outcome.report, revision = graph.state.revision + 1))
                         } catch (e: Exception) {
@@ -56,6 +57,7 @@ class OperationService : Service() {
                         }
                     }
                 } finally {
+                    graph.transferProgress = null
                     graph.cancellation = null
                     wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
                     graph.running.set(false)
