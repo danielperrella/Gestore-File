@@ -18,3 +18,6 @@
 Il consenso OAuth è fermo all’accettazione delle norme Google, da completare personalmente dal proprietario. Client OAuth Android, account di test, collaudo con due account reali e verifica dello scope ristretto non sono completati. I test simulati non dimostrano che un account Google reale possa accedere alla candidata.
 
 Il canale pubblico rimane alla 0.3.0. Il collegamento Google nella build predefinita è disabilitato finché non viene completata la configurazione; `-PdriveConfigured=true` è riservato alla build di collaudo dopo la configurazione. Vedere `GOOGLE_DRIVE_SETUP.md`.
+
+> Aggiornamento distribuzione: su richiesta del proprietario, la 0.4.0-rc1 è ora offerta anche dal controllo all’apertura come versione di prova (channel preview). L’APK pubblicato è compilato con -PdriveConfigured=true. Configurazione OAuth e collaudo con account reali restano incompleti; non equivale a una release stabile verificata.
+

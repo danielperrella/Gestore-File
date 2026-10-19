@@ -33,3 +33,6 @@ Esegui `node scripts/package-release.mjs` per preparare `candidate/gestorefile.a
 Non pubblicare la candidata nel manifest automatico. Completa configurazione branding, documentazione privacy, verifica OAuth per lo scope ristretto e test reali. Non dichiarare la verifica completata sulla base dei soli test simulati. Il fatto che i file transitino direttamente dal telefono a Google non elimina automaticamente tutti i requisiti di verifica del progetto.
 
 Solo dopo queste verifiche: versione stabile **0.4.0 / codice 6**, build con `-PdriveConfigured=true`, test/lint/release, `node scripts/package-release.mjs "Google Drive disponibile" --drive-approved`, verifica firma e metadati, commit con APK/manifest e release GitHub. Chi usa la 0.3.0 riceverà allora l’aggiornamento all’apertura senza disinstallare.
+
+> Aggiornamento distribuzione: su richiesta del proprietario, la 0.4.0-rc1 è ora offerta anche dal controllo all’apertura come versione di prova (channel preview). L’APK pubblicato è compilato con -PdriveConfigured=true. Configurazione OAuth e collaudo con account reali restano incompleti; non equivale a una release stabile verificata.
+

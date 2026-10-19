@@ -1,8 +1,9 @@
 {
-  "versionCode": 4,
-  "versionName": "0.3.0",
+  "versionCode": 5,
+  "versionName": "0.4.0-rc1",
   "apkUrl": "https://danielperrella.github.io/Gestore-File/gestorefile.apk",
-  "size": 183406,
-  "sha256": "a6aa098beb698bfc9a56c0e8dd403e25d32e11cf24b1d4b6aa43aa3edb9fc02d",
-  "notes": "Nuova interfaccia chiara e pulita: cartelle ambra, comandi blu, navigazione inferiore, selezione contestuale e finestre ridisegnate."
+  "size": 939709,
+  "sha256": "55a12b144726d0fb752de8199186a4833b578a794686fe52ec3f96f47844940c",
+  "notes": "Versione di prova 0.4.0-rc1: Google Drive multi-account. Collegamento abilitato; configurazione OAuth Google ancora incompleta, accesso potenzialmente non disponibile.",
+  "channel": "preview"
 }

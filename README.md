@@ -136,3 +136,6 @@ I test JVM esercitano copie/spostamenti, integrità, cancellazione, conflitti, e
 6. Versiona insieme sorgenti, `docs/gestorefile.apk` e `docs/update.json`, quindi invia su `main`.
 
 GitHub Actions esegue test e lint, controlla hash, pacchetto, versione e firma valida dell’APK e pubblica `docs/` su GitHub Pages. Distribuisce l’APK già firmato: nessuna chiave privata entra in GitHub. Le build debug di CI non vengono distribuite.
+
+> Aggiornamento distribuzione: su richiesta del proprietario, la 0.4.0-rc1 è ora offerta anche dal controllo all’apertura come versione di prova (channel preview). L’APK pubblicato è compilato con -PdriveConfigured=true. Configurazione OAuth e collaudo con account reali restano incompleti; non equivale a una release stabile verificata.
+

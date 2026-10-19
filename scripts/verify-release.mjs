@@ -11,7 +11,7 @@ assert.equal(manifest.size, apk.length);
 assert.equal(manifest.sha256, createHash('sha256').update(apk).digest('hex'));
 const sourceCode = Number(gradle.match(/versionCode = (\d+)/)[1]);
 const sourceName = gradle.match(/versionName = "([^"]+)"/)[1];
-if (sourceName.includes('-') && directory === 'docs') {
+if (sourceName.includes('-') && directory === 'docs' && manifest.channel !== 'preview') {
   assert.ok(manifest.versionCode < sourceCode, 'La candidata non deve entrare nel canale stabile');
   assert.ok(!manifest.versionName.includes('-'));
 } else {
