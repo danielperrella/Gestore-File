@@ -26,7 +26,20 @@ data class DriveAccount(val key: String, val permissionId: String, val email: St
 }
 
 class DriveAccounts(private val context: Context, private val check: () -> Unit, private val onUpload: (Long) -> Unit = {}) {
-    companion object { const val SCOPE = "https://www.googleapis.com/auth/drive" }
+    companion object {
+        const val SCOPE = "https://www.googleapis.com/auth/drive"
+        fun authorizationError(error: Exception?): String {
+            val code = (error as? com.google.android.gms.common.api.ApiException)?.statusCode
+            val explanation = when(code) {
+                10 -> "Configurazione Google dell’app non valida. Occorre completare il client OAuth Android con pacchetto e firma corretti."
+                7 -> "Google non è raggiungibile. Verifica la connessione e riprova."
+                16 -> "Google ha interrotto il collegamento: consenso chiuso o accesso non disponibile."
+                else -> "Google non ha completato il collegamento."
+            }
+            val detail = code?.let { " Codice Google: $it." } ?: ""
+            return explanation + detail + " La configurazione OAuth di questa versione di prova è ancora da completare; riprovare non risolve un client non configurato."
+        }
+    }
     private val preferences = context.getSharedPreferences("drive-accounts",Context.MODE_PRIVATE)
     private data class Token(val value: String, val until: Long)
     private val tokens = ConcurrentHashMap<String,Token>()
@@ -44,8 +57,8 @@ class DriveAccounts(private val context: Context, private val check: () -> Unit,
         if(account != null) setAccount(account.androidAccount())
         else setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
     }.build()
-    fun authorize(activity: Activity, account: DriveAccount?, ready: (AuthorizationResult) -> Unit, failed: () -> Unit) {
-        Identity.getAuthorizationClient(activity).authorize(request(account)).addOnSuccessListener(activity,ready).addOnFailureListener(activity) { failed() }
+    fun authorize(activity: Activity, account: DriveAccount?, ready: (AuthorizationResult) -> Unit, failed: (Exception) -> Unit) {
+        Identity.getAuthorizationClient(activity).authorize(request(account)).addOnSuccessListener(activity,ready).addOnFailureListener(activity) { failed(it) }
     }
     fun result(data: Intent?) = client.getAuthorizationResultFromIntent(data)
     fun connect(result: AuthorizationResult, expectedKey: String?): DriveAccount {

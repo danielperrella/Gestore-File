@@ -477,8 +477,17 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if(requestCode == 44) {
-            if(resultCode != RESULT_OK) { toast("Collegamento Google annullato"); pendingDriveKey = null; return }
-            try { finishDriveAuthorization(graph.drive.result(data)) } catch (_: Exception) { error("Autorizzazione Google non completata. Riprova da Posizioni.") }
+            // Google can return an ApiException in the Intent even with RESULT_CANCELED.
+            // Parse it before classifying the outcome; do not discard the actual status.
+            try {
+                if(data == null) {
+                    pendingDriveKey = null
+                    error(DriveAccounts.authorizationError(null))
+                } else finishDriveAuthorization(graph.drive.result(data))
+            } catch (e: Exception) {
+                pendingDriveKey = null
+                error(DriveAccounts.authorizationError(e))
+            }
             return
         }
         if(requestCode == 45) {
@@ -515,9 +524,9 @@ class MainActivity : Activity() {
             if(!canUseUi()) return@authorize
             if(result.hasResolution()) {
                 try { startIntentSenderForResult(result.pendingIntent!!.intentSender,44,null,0,0,0) }
-                catch (_: Exception) { error("Impossibile aprire l’autorizzazione Google") }
+                catch (e: Exception) { pendingDriveKey = null; error(DriveAccounts.authorizationError(e)) }
             } else finishDriveAuthorization(result)
-        }, { if(canUseUi()) error("Collegamento Google non riuscito. Verifica rete e configurazione OAuth, poi riprova.") })
+        }, { e -> pendingDriveKey = null; if(canUseUi()) error(DriveAccounts.authorizationError(e)) })
     }
     private fun finishDriveAuthorization(result: com.google.android.gms.auth.api.identity.AuthorizationResult) {
         val expected = pendingDriveKey; pendingDriveKey = null
