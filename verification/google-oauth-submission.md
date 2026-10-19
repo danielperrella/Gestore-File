@@ -39,3 +39,9 @@ Record the real Android app in English, using a dedicated test folder and no pri
 7. Show the privacy link. Upload the finished recording as an unlisted YouTube video and enter its real URL in Google's verification form.
 
 Pending: domain ownership verification, Google's branding result, authentic live demonstration/video URL and data-access submission. Production status alone is not approval.
+
+## Ownership verification completed (2026-10-19 18:50 +02:00)
+
+Google Search Console confirmed ownership of https://danielperrella.github.io/Gestore-File/ using docs/googlee25900306ac79f13.html. Keep this verification file deployed. OAuth audience is Production as explicitly confirmed by the owner; no Google approval is claimed.
+
+Branding's previous automated check reported unverified homepage ownership and requested waiting 24 hours after ownership verification before retrying. The data-access submission remains gated on verified/published branding and an authentic demonstration video. No Android phone is currently connected via adb; no live Google login or demonstration recording has been performed. A simulated authorization must not be submitted as real evidence.
