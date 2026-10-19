@@ -37,7 +37,7 @@ class DriveAccounts(private val context: Context, private val check: () -> Unit,
                 else -> "Google non ha completato il collegamento."
             }
             val detail = code?.let { " Codice Google: $it." } ?: ""
-            return explanation + detail + " La configurazione OAuth di questa versione di prova è ancora da completare; riprovare non risolve un client non configurato."
+            return explanation + detail + " Questa versione è in test Google: usa un account abilitato come tester. Se hai appena ricevuto l’accesso, attendi la propagazione delle impostazioni Google."
         }
     }
     private val preferences = context.getSharedPreferences("drive-accounts",Context.MODE_PRIVATE)

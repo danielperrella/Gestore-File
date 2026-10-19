@@ -1,9 +1,9 @@
 {
-  "versionCode": 5,
-  "versionName": "0.4.0-rc1",
+  "versionCode": 6,
+  "versionName": "0.4.0-rc2",
   "apkUrl": "https://danielperrella.github.io/Gestore-File/gestorefile.apk",
-  "size": 939709,
-  "sha256": "55a12b144726d0fb752de8199186a4833b578a794686fe52ec3f96f47844940c",
-  "notes": "Versione di prova 0.4.0-rc1: Google Drive multi-account. Collegamento abilitato; configurazione OAuth Google ancora incompleta, accesso potenzialmente non disponibile.",
+  "size": 940314,
+  "sha256": "89ed2b8e166e23236268f8d5fdf085e6615a2ca6036cdf91b5cf03bfe26851ef",
+  "notes": "Google Drive: client Android configurato per i tester; corretta la gestione degli errori di collegamento.",
   "channel": "preview"
 }

@@ -36,3 +36,9 @@ Solo dopo queste verifiche: versione stabile **0.4.0 / codice 6**, build con `-P
 
 > Aggiornamento distribuzione: su richiesta del proprietario, la 0.4.0-rc1 è ora offerta anche dal controllo all’apertura come versione di prova (channel preview). L’APK pubblicato è compilato con -PdriveConfigured=true. Configurazione OAuth e collaudo con account reali restano incompleti; non equivale a una release stabile verificata.
 
+
+## Stato aggiornato: 0.4.0-rc2
+
+Consenso sviluppatore completato su Google Cloud. Registrato client Android per `it.liberofiles.app` con la SHA-1 originale sopra indicata. Configurato solo lo scope `https://www.googleapis.com/auth/drive`, home page e privacy pubbliche; stato Google **Test**, un account del proprietario abilitato come tester. Non equivale alla verifica Google per disponibilità generale. Ulteriori account vanno aggiunti esplicitamente alla lista tester prima del collegamento.
+
+La candidata corrente è **0.4.0-rc2 / codice 6**, compilata con `-PdriveConfigured=true` e offerta dal manifest pubblico `channel=preview`. Conserva gli errori restituiti da Google anche quando l’Activity ritorna RESULT_CANCELED; mostra il codice numerico senza includere messaggi sensibili. Propagazione impostazioni Google e prova reale dal telefono restano da verificare. Per una futura versione stabile usare almeno codice **7**.
