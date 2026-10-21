@@ -1,9 +1,9 @@
 {
-  "versionCode": 6,
-  "versionName": "0.4.0-rc2",
+  "versionCode": 7,
+  "versionName": "0.4.0-rc3",
   "apkUrl": "https://danielperrella.github.io/Gestore-File/gestorefile.apk",
-  "size": 940314,
-  "sha256": "89ed2b8e166e23236268f8d5fdf085e6615a2ca6036cdf91b5cf03bfe26851ef",
-  "notes": "Google Drive: client Android configurato per i tester; corretta la gestione degli errori di collegamento.",
+  "size": 942698,
+  "sha256": "260f5464783bc169f1fd0f96c65dd32fd31022e27065fac5295ef8dd6e4616d1",
+  "notes": "Ricerca file nella cartella corrente",
   "channel": "preview"
 }

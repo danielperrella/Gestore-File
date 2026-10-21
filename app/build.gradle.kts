@@ -24,8 +24,8 @@ android {
         applicationId = "it.liberofiles.app"
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4.0-rc2"
+        versionCode = 7
+        versionName = "0.4.0-rc3"
         buildConfigField("boolean", "DRIVE_CONFIGURED", providers.gradleProperty("driveConfigured").orElse("false").get())
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

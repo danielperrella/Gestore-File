@@ -131,11 +131,11 @@ I test JVM esercitano copie/spostamenti, integrità, cancellazione, conflitti, e
 1. Incrementa `versionCode` e `versionName` in `app/build.gradle.kts`.
 2. Ripristina la stessa chiave originale in `signing/development.jks`, esclusa da Git. Una chiave diversa non può aggiornare l’app distribuita.
 3. Esegui `gradlew.bat :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleRelease`.
-4. Esegui `node scripts/package-release.mjs "Note della versione"` e `node scripts/verify-release.mjs`.
-5. Verifica con `apksigner verify --verbose --print-certs docs/gestorefile.apk` e confronta la firma con la release precedente.
+4. Per una candidata di prova usa `node scripts/package-release.mjs "Note della versione" --preview-site`, così l’APK e il manifest preview vengono preparati in `docs/`. Per una versione stabile usa il comando senza `--preview-site`.
+5. Esegui `node scripts/verify-release.mjs` e confronta la firma con la release precedente.
 6. Versiona insieme sorgenti, `docs/gestorefile.apk` e `docs/update.json`, quindi invia su `main`.
 
 GitHub Actions esegue test e lint, controlla hash, pacchetto, versione e firma valida dell’APK e pubblica `docs/` su GitHub Pages. Distribuisce l’APK già firmato: nessuna chiave privata entra in GitHub. Le build debug di CI non vengono distribuite.
 
-> Aggiornamento distribuzione: su richiesta del proprietario, la 0.4.0-rc1 è ora offerta anche dal controllo all’apertura come versione di prova (channel preview). L’APK pubblicato è compilato con -PdriveConfigured=true. Configurazione OAuth e collaudo con account reali restano incompleti; non equivale a una release stabile verificata.
+> Aggiornamento distribuzione: la 0.4.0-rc3 è una versione di prova (channel preview), compilata con `-PdriveConfigured=true` e offerta dal controllo aggiornamenti all’apertura. Drive richiede l’autorizzazione Google per ogni account; la candidata non equivale a una release stabile verificata.
 
