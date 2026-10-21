@@ -38,6 +38,7 @@ class UiIcon(private val kind: String, private val tint: Int, private val size: 
             "trash" -> { line(4f,7f,20f,7f); line(9f,4f,15f,4f); line(6f,7f,7f,21f,17f,21f,18f,7f); line(10f,11f,10f,17f); line(14f,11f,14f,17f) }
             "grid" -> { rect(3f,3f,10f,10f,1f); rect(14f,3f,21f,10f,1f); rect(3f,14f,10f,21f,1f); rect(14f,14f,21f,21f,1f) }
             "list" -> { for(y in listOf(5f,12f,19f)) { line(3f,y,5f,y); line(9f,y,21f,y) } }
+            "search" -> { canvas.drawCircle(10.5f,10.5f,6.5f,paint); line(15.5f,15.5f,21f,21f) }
             "sort" -> { line(4f,6f,20f,6f); line(4f,12f,15f,12f); line(4f,18f,10f,18f) }
             "plus" -> { line(12f,5f,12f,19f); line(5f,12f,19f,12f) }
             "up" -> line(5f,12f,12f,5f,19f,12f,12f,5f,12f,20f)

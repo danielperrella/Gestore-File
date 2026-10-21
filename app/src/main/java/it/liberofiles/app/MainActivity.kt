@@ -48,6 +48,8 @@ class MainActivity : Activity() {
     private lateinit var crumbs: LinearLayout
     private lateinit var location: TextView
     private lateinit var status: TextView
+    private lateinit var searchBar: LinearLayout
+    private lateinit var searchInput: EditText
     private lateinit var jobLine: LinearLayout
     private lateinit var jobText: TextView
     private lateinit var selectionBar: LinearLayout
@@ -67,6 +69,7 @@ class MainActivity : Activity() {
     private var grid = false
     private var sort = "name"
     private var descending = false
+    private var searchQuery = ""
     private val observer: (JobState) -> Unit = { showJob(it) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,6 +130,12 @@ class MainActivity : Activity() {
         val tools = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(22), dp(8), dp(12), dp(8)) }
         status = label("", 12f, muted).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         tools.addView(status, LinearLayout.LayoutParams(0,-2,1f))
+        tools.addView(iconButton("search", "Cerca nella cartella") {
+            searchBar.visibility = View.VISIBLE
+            searchInput.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        })
         tools.addView(iconButton("sort", "Ordina file") { sorting() })
         val viewToggle = iconButton(if (grid) "list" else "grid", if (grid) "Mostra elenco" else "Mostra griglia") {}
         viewToggle.setOnClickListener {
@@ -138,6 +147,34 @@ class MainActivity : Activity() {
         tools.addView(viewToggle)
         tools.addView(iconButton("more", "Menu della cartella") { menu() })
         root.addView(tools)
+        searchBar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(4), dp(12), dp(8))
+            visibility = View.GONE
+        }
+        searchInput = EditText(this).apply {
+            hint = "Cerca in questa cartella"
+            singleLine = true
+            textSize = 15f * font
+            setTextColor(ink)
+            setHintTextColor(muted)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setPadding(dp(14), 0, dp(12), 0)
+            background = shape(panel)
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    val next = s?.toString()?.trim().orEmpty()
+                    if (next == searchQuery) return
+                    searchQuery = next
+                    preparePresentation()
+                }
+                override fun afterTextChanged(s: android.text.Editable?) = Unit
+            })
+        }
+        searchBar.addView(searchInput, LinearLayout.LayoutParams(0, dp(48), 1f))
+        searchBar.addView(iconButton("close", "Chiudi ricerca") { closeSearch() })
+        root.addView(searchBar)
         jobLine = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(4), dp(8), dp(4)); background = shape(panel); visibility = View.GONE }
         jobText = label("", 12f).apply { maxLines = 2 }
         jobLine.addView(jobText, LinearLayout.LayoutParams(0, -2, 1f))
@@ -182,12 +219,22 @@ class MainActivity : Activity() {
     }
     @Deprecated("Android compatibility back handling")
     override fun onBackPressed() {
-        if (selected.isNotEmpty()) { selected.clear(); refreshSelection() }
+        if (searchBar.visibility == View.VISIBLE) closeSearch()
+        else if (selected.isNotEmpty()) { selected.clear(); refreshSelection() }
         else if (!up()) super.onBackPressed()
     }
 
     private fun navigate(node: Node) {
         if (node.store == "local" && !Environment.isExternalStorageManager()) { current = node; showPermissionScreen(); return }
+        if (current != node) {
+            searchQuery = ""
+            if (::searchInput.isInitialized) searchInput.setText("")
+            if (::searchBar.isInitialized) searchBar.visibility = View.GONE
+            if (::searchInput.isInitialized) {
+                (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                    ?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+            }
+        }
         waitingForPermission = false
         currentCapabilities = Capabilities(create = false)
         current = node; selected.clear(); collection?.isEnabled = false; updateCrumbs(); location.text = displayName(node)
@@ -219,8 +266,17 @@ class MainActivity : Activity() {
         updateActions()
     }
     private fun visibleEntries(): List<Entry> = presented
+    private fun closeSearch() {
+        searchQuery = ""
+        searchInput.setText("")
+        searchBar.visibility = View.GONE
+        (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+            ?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+        searchInput.clearFocus()
+        preparePresentation()
+    }
     private fun preparePresentation() {
-        val raw = entries; val showHidden = hidden; val order = sort; val reverse = descending
+        val raw = entries; val showHidden = hidden; val order = sort; val reverse = descending; val query = searchQuery
         val generation = ++presentationGeneration; val node = current
         graph.reads.execute {
         val comparator: Comparator<Entry> = when (order) {
@@ -230,10 +286,15 @@ class MainActivity : Activity() {
             else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         }
         val ordered = if (reverse) comparator.reversed() else comparator
-        val result = raw.filter { showHidden || !it.name.startsWith('.') }.sortedWith(compareBy<Entry> { !it.directory }.then(ordered).thenBy { it.name })
+        val result = raw.filter { (showHidden || !it.name.startsWith('.')) && (query.isEmpty() || it.name.contains(query, ignoreCase = true)) }
+            .sortedWith(compareBy<Entry> { !it.directory }.then(ordered).thenBy { it.name })
         graph.main.post { if (!canUseUi()) return@post
 
-            if (generation == presentationGeneration && node == current && !isFinishing) { presented = result; renderEntries() }
+            if (generation == presentationGeneration && node == current && !isFinishing) {
+                presented = result
+                selected.retainAll(result.mapTo(HashSet()) { it.node })
+                renderEntries()
+            }
         }
         }
     }
@@ -241,7 +302,10 @@ class MainActivity : Activity() {
         val visible = visibleEntries()
         status.text = if (selected.isEmpty()) "${visible.size} elementi · ${if (sort == "name") "nome" else if (sort == "size") "dimensione" else if (sort == "date") "data" else "tipo"} ${if (descending) "↓" else "↑"}"
             else "${selected.size} selezionati"
-        if (visible.isEmpty()) { showEmpty("Cartella vuota"); updateActions(); return }
+        if (visible.isEmpty()) {
+            showEmpty(if (searchQuery.isNotEmpty()) "Nessun file trovato" else "Cartella vuota")
+            updateActions(); return
+        }
         val oldPosition = collection?.firstVisiblePosition ?: 0
         body.removeAllViews()
         val list: AbsListView = if (grid) GridView(this).apply { numColumns = GridView.AUTO_FIT; columnWidth = dp(152); stretchMode = GridView.STRETCH_COLUMN_WIDTH; horizontalSpacing = dp(10); verticalSpacing = dp(10); setPadding(dp(16), 0, dp(16), dp(16)); clipToPadding = false }
