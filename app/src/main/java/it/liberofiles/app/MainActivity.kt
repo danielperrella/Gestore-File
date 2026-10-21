@@ -154,7 +154,7 @@ class MainActivity : Activity() {
         }
         searchInput = EditText(this).apply {
             hint = "Cerca in questa cartella"
-            singleLine = true
+            isSingleLine = true
             textSize = 15f * font
             setTextColor(ink)
             setHintTextColor(muted)
